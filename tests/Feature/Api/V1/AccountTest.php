@@ -30,7 +30,8 @@ class AccountTest extends TestCase
 
         $response->assertCreated()
             ->assertJsonPath('name', 'Conta Corrente')
-            ->assertJsonPath('initial_balance_cents', 100000);
+            ->assertJsonPath('initial_balance_cents', 100000)
+            ->assertJsonPath('current_balance_cents', 100000);
 
         $this->assertDatabaseHas('accounts', ['name' => 'Conta Corrente']);
     }

@@ -7,6 +7,7 @@ use App\Traits\BelongsToUser;
 use Database\Factories\AccountFactory;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
@@ -32,5 +33,11 @@ class Account extends Model
             'initial_balance_cents' => 'integer',
             'is_active' => 'boolean',
         ];
+    }
+
+    /** @return HasMany<Transaction, $this> */
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
     }
 }
