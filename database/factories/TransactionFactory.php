@@ -42,6 +42,14 @@ class TransactionFactory extends Factory
         ]);
     }
 
+    public function overdue(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => TransactionStatus::PENDING,
+            'due_date' => Carbon::today()->subDays(5),
+        ]);
+    }
+
     public function income(): static
     {
         return $this->state(fn (array $attributes) => ['type' => TransactionType::INCOME]);

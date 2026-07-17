@@ -2,15 +2,19 @@
 
 namespace App\Models;
 
+use App\Enum\TransactionDisplayStatus;
 use App\Enum\TransactionEntryType;
 use App\Enum\TransactionStatus;
 use App\Enum\TransactionType;
 use App\Traits\BelongsToUser;
 use Database\Factories\TransactionFactory;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * @use HasFactory<TransactionFactory>
@@ -55,5 +59,28 @@ class Transaction extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    public function isOverdue(): bool
+    {
+        return $this->status === TransactionStatus::PENDING
+            && $this->due_date !== null
+            && $this->due_date->lt(Carbon::today());
+    }
+
+    protected function displayStatus(): Attribute
+    {
+        return Attribute::get(fn (): TransactionDisplayStatus => match (true) {
+            $this->status === TransactionStatus::CANCELLED => TransactionDisplayStatus::CANCELLED,
+            $this->status === TransactionStatus::PAID => TransactionDisplayStatus::PAID,
+            $this->isOverdue() => TransactionDisplayStatus::OVERDUE,
+            default => TransactionDisplayStatus::PENDING,
+        });
+    }
+
+    public function scopeOverdue(Builder $query): Builder
+    {
+        return $query->where('status', TransactionStatus::PENDING->value)
+            ->whereDate('due_date', '<', Carbon::today());
     }
 }

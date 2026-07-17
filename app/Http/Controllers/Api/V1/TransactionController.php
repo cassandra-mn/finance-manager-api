@@ -6,22 +6,26 @@ use App\Actions\Transactions\CreateTransactionAction;
 use App\Actions\Transactions\DeleteTransactionAction;
 use App\Actions\Transactions\UpdateTransactionAction;
 use App\Data\Transactions\CreateTransactionData;
+use App\Data\Transactions\TransactionFiltersData;
 use App\Data\Transactions\UpdateTransactionData;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Transactions\ListTransactionsRequest;
 use App\Http\Requests\Transactions\StoreTransactionRequest;
 use App\Http\Requests\Transactions\UpdateTransactionRequest;
 use App\Http\Resources\Transactions\TransactionResource;
 use App\Models\Transaction;
 use App\Repositories\TransactionRepository;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class TransactionController extends Controller
 {
-    public function index(Request $request, TransactionRepository $repository): JsonResponse
+    public function index(ListTransactionsRequest $request, TransactionRepository $repository): JsonResponse
     {
-        $transactions = $repository->paginateForUser($request->user()->id);
+        $transactions = $repository->paginateForUser(
+            $request->user()->id,
+            TransactionFiltersData::fromRequest($request),
+        );
 
         return TransactionResource::collection($transactions)->response();
     }
