@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use Illuminate\Support\Facades\Route;
 
@@ -12,5 +13,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
             Route::get('me', [AuthController::class, 'me'])->name('me');
         });
+    });
+
+    Route::middleware('auth:sanctum')->group(function (): void {
+        Route::apiResource('accounts', AccountController::class);
     });
 });
