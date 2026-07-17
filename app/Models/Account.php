@@ -40,4 +40,10 @@ class Account extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    /** @return HasMany<Recurrence, $this> */
+    public function recurrences(): HasMany
+    {
+        return $this->hasMany(Recurrence::class);
+    }
 }

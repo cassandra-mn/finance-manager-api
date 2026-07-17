@@ -29,6 +29,7 @@ class TransactionResource extends JsonResource
             'due_date' => $this->due_date?->toDateString(),
             'paid_at' => $this->paid_at,
             'notes' => $this->notes,
+            'recurrence_id' => $this->recurrence_id,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

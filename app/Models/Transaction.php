@@ -27,6 +27,7 @@ class Transaction extends Model
         'user_id',
         'account_id',
         'category_id',
+        'recurrence_id',
         'type',
         'entry_type',
         'status',
@@ -59,6 +60,12 @@ class Transaction extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    /** @return BelongsTo<Recurrence, $this> */
+    public function recurrence(): BelongsTo
+    {
+        return $this->belongsTo(Recurrence::class);
     }
 
     public function isOverdue(): bool
