@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Api\V1\Auth;
 
+use App\Models\Category;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -24,6 +25,20 @@ class RegisterTest extends TestCase
             ->assertJsonStructure(['user' => ['id', 'name', 'email'], 'token', 'token_type']);
 
         $this->assertDatabaseHas('users', ['email' => 'ana@example.com']);
+    }
+
+    public function test_registering_seeds_default_categories_for_the_user(): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Ana Silva',
+            'email' => 'ana@example.com',
+            'password' => 'password123',
+            'password_confirmation' => 'password123',
+        ])->assertCreated();
+
+        $user = User::where('email', 'ana@example.com')->firstOrFail();
+
+        $this->assertGreaterThan(0, Category::withoutGlobalScopes()->where('user_id', $user->id)->count());
     }
 
     public function test_email_must_be_unique(): void
