@@ -21,5 +21,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('categories', CategoryController::class);
         Route::apiResource('transactions', TransactionController::class);
+
+        Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
+        Route::post('transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
     });
 });

@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Actions\Transactions\CancelTransactionAction;
 use App\Actions\Transactions\CreateTransactionAction;
 use App\Actions\Transactions\DeleteTransactionAction;
+use App\Actions\Transactions\MarkTransactionAsPaidAction;
 use App\Actions\Transactions\UpdateTransactionAction;
 use App\Data\Transactions\CreateTransactionData;
 use App\Data\Transactions\TransactionFiltersData;
@@ -56,5 +58,19 @@ class TransactionController extends Controller
         $action->execute($transaction);
 
         return response()->json(null, Response::HTTP_NO_CONTENT);
+    }
+
+    public function pay(Transaction $transaction, MarkTransactionAsPaidAction $action): JsonResponse
+    {
+        $transaction = $action->execute($transaction);
+
+        return (new TransactionResource($transaction->load(['account', 'category'])))->response();
+    }
+
+    public function cancel(Transaction $transaction, CancelTransactionAction $action): JsonResponse
+    {
+        $transaction = $action->execute($transaction);
+
+        return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
 }
