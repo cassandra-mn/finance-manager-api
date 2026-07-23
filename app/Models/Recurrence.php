@@ -31,7 +31,9 @@ class Recurrence extends Model
         'frequency',
         'interval',
         'start_date',
+        'next_due_date',
         'end_date',
+        'notes',
         'is_active',
     ];
 
@@ -44,6 +46,7 @@ class Recurrence extends Model
             'amount_cents' => 'integer',
             'interval' => 'integer',
             'start_date' => 'date',
+            'next_due_date' => 'date',
             'end_date' => 'date',
             'is_active' => 'boolean',
         ];

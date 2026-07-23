@@ -5,7 +5,7 @@ namespace App\Enum;
 enum RecurrenceFrequency: string
 {
     case WEEKLY = 'weekly';
-    case BIWEEKLY = 'biweekly';
+    case FORTNIGHTLY = 'fortnightly';
     case MONTHLY = 'monthly';
     case YEARLY = 'yearly';
 
@@ -13,7 +13,7 @@ enum RecurrenceFrequency: string
     {
         return match ($this) {
             self::WEEKLY => 'Semanal',
-            self::BIWEEKLY => 'Quinzenal',
+            self::FORTNIGHTLY => 'Quinzenal',
             self::MONTHLY => 'Mensal',
             self::YEARLY => 'Anual',
         };
