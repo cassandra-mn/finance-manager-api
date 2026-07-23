@@ -5,9 +5,10 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Base para a geração automática de lançamentos recorrentes (fixos e variáveis).
- * Nesta etapa só o schema e o Model existem — a geração dos lançamentos em si
- * fica para uma próxima etapa (via Resolver de estratégia por frequência).
+ * Regras de recorrência (receitas e despesas fixas/variáveis). Nesta etapa
+ * a entidade cobre apenas o CRUD da regra — a geração automática de
+ * lançamentos a partir dela fica para uma próxima etapa (via Resolver de
+ * estratégia por frequência).
  */
 return new class extends Migration
 {
@@ -21,11 +22,13 @@ return new class extends Migration
             $table->string('type');
             $table->string('entry_type');
             $table->string('description');
-            $table->bigInteger('amount_cents')->nullable();
+            $table->bigInteger('amount_cents');
             $table->string('frequency');
             $table->unsignedSmallInteger('interval')->default(1);
             $table->date('start_date');
+            $table->date('next_due_date');
             $table->date('end_date')->nullable();
+            $table->text('notes')->nullable();
             $table->boolean('is_active')->default(true);
             $table->timestamps();
             $table->softDeletes();
