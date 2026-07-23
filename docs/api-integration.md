@@ -155,3 +155,161 @@ POST /api/v1/recurrences
 - `end_date` (quando enviada) e `next_due_date` não podem ser anteriores a `start_date`.
 - Pausar uma regra não a remove nem apaga seu histórico — apenas marca `is_active = false`.
 - Excluir uma regra é soft delete: o registro não aparece mais nas listagens/consultas, mas não é removido fisicamente.
+
+## Orçamentos (`/api/v1/budgets`)
+
+> **Importante:** o **backend é a fonte oficial dos cálculos de orçamento** (gasto acumulado, restante, percentual de uso e status). O frontend não deve recalcular esses valores localmente — deve exibir exatamente o que a API retorna. Esta feature implementa apenas orçamento **mensal**, por categoria. Dashboard, notificações/alertas, recorrência automática de orçamento, parcelamentos e relatórios adicionais **não fazem parte desta etapa**.
+
+Um orçamento representa um limite de gasto mensal para uma categoria de despesa (`type = expense`). Categorias de receita (`income`) não podem ter orçamento.
+
+### Campos do orçamento
+
+| Campo | Tipo | Observações |
+| --- | --- | --- |
+| `category_id` | int | Obrigatório. Deve pertencer ao usuário autenticado e ser uma categoria `expense`. |
+| `amount_cents` | int | Obrigatório. Inteiro positivo em centavos (nunca float/double). |
+| `reference_month` | int | Obrigatório. Entre `1` e `12`. |
+| `reference_year` | int | Obrigatório. Ano com 4 dígitos. |
+
+Não envie `user_id` no payload — ele é sempre resolvido a partir do usuário autenticado.
+
+Só pode existir **um orçamento por usuário + categoria + mês + ano de referência**. Um orçamento excluído (soft delete) não bloqueia a criação de um novo orçamento equivalente para o mesmo período.
+
+### Endpoints
+
+Todos exigem autenticação (`Authorization: Bearer <token>`).
+
+- `GET /api/v1/budgets` — lista os orçamentos do usuário autenticado (array simples, sem paginação — mesmo padrão usado por `accounts`, `categories` e `recurrences`).
+- `POST /api/v1/budgets` — cria um novo orçamento.
+- `GET /api/v1/budgets/{id}` — exibe um orçamento.
+- `PATCH /api/v1/budgets/{id}` — atualiza campos do orçamento.
+- `DELETE /api/v1/budgets/{id}` — remove o orçamento (soft delete — o histórico é preservado).
+- `GET /api/v1/budgets/status?reference_date=YYYY-MM-DD` — retorna o consumo calculado de cada orçamento no mês de referência, pronto para exibição.
+
+### Filtros de listagem (`GET /budgets`)
+
+Combináveis via query string:
+
+| Filtro | Valores |
+| --- | --- |
+| `category_id` | id da categoria |
+| `reference_month` | `1`–`12` |
+| `reference_year` | ano com 4 dígitos |
+| `reference_date` | `YYYY-MM-DD` — alternativa conveniente a `reference_month`/`reference_year`; quando enviado, tem prioridade sobre os dois |
+
+A listagem **não é paginada** (mesmo padrão de `accounts`/`categories`/`recurrences`) — não há parâmetro `per_page`.
+
+### Payload de criação
+
+```json
+POST /api/v1/budgets
+
+{
+  "category_id": 3,
+  "amount_cents": 80000,
+  "reference_month": 8,
+  "reference_year": 2026
+}
+```
+
+### Resposta do orçamento (CRUD)
+
+```json
+{
+  "id": 1,
+  "category": {
+    "id": 3,
+    "name": "Alimentação",
+    "type": "expense",
+    "type_label": "Despesa",
+    "color": "#f97316",
+    "icon": null,
+    "created_at": "2026-07-23T00:00:00.000000Z",
+    "updated_at": "2026-07-23T00:00:00.000000Z"
+  },
+  "amount_cents": 80000,
+  "reference_month": 8,
+  "reference_year": 2026,
+  "created_at": "2026-07-23T00:00:00.000000Z",
+  "updated_at": "2026-07-23T00:00:00.000000Z"
+}
+```
+
+### Regras de cálculo do consumo (`GET /budgets/status`)
+
+Para cada orçamento do mês de referência, `spent_cents` soma o `amount_cents` das transações que atendem **todas** as condições:
+
+- pertencem ao usuário autenticado;
+- têm a mesma `category_id` do orçamento;
+- são do tipo `expense`;
+- o `status` é **diferente** de `cancelled` — ou seja, `pending`, `paid` e `overdue` (que é apenas `pending` com `due_date` no passado) contam como comprometimento do orçamento; `cancelled` nunca entra no cálculo;
+- o `due_date` está dentro do mês/ano de referência (do primeiro ao último dia do mês).
+
+A partir disso:
+
+- `remaining_cents = amount_cents - spent_cents` (pode ser negativo quando excedido).
+- `usage_percentage = round(spent_cents / amount_cents * 100, 2)` — **apenas um valor de apresentação** (decimal), nunca a fonte de verdade. Toda comparação de limite (`status`) é feita com aritmética inteira em centavos, para não haver erro de arredondamento exatamente em 80% ou 100%.
+
+### Definição de `status`
+
+| Status | Condição exata |
+| --- | --- |
+| `safe` | `spent_cents * 100 < amount_cents * 80` (uso **abaixo** de 80%) |
+| `warning` | `spent_cents * 100 >= amount_cents * 80` **e** `spent_cents <= amount_cents` (uso entre 80% e 100%, **ambos os limites incluídos**) |
+| `exceeded` | `spent_cents > amount_cents` (uso **acima** de 100%) |
+
+Ou seja: exatamente **80%** de uso é `warning` (não `safe`); exatamente **100%** de uso ainda é `warning` (não `exceeded`); qualquer valor acima de 100% é `exceeded`.
+
+### Resposta de status
+
+```json
+GET /api/v1/budgets/status?reference_date=2026-08-15
+
+{
+  "reference_period": {
+    "month": 8,
+    "year": 2026,
+    "from": "2026-08-01",
+    "to": "2026-08-31"
+  },
+  "data": [
+    {
+      "id": 1,
+      "category": {
+        "id": 3,
+        "name": "Alimentação",
+        "type": "expense",
+        "type_label": "Despesa",
+        "color": "#f97316",
+        "icon": null,
+        "created_at": "2026-07-23T00:00:00.000000Z",
+        "updated_at": "2026-07-23T00:00:00.000000Z"
+      },
+      "amount_cents": 80000,
+      "spent_cents": 64500,
+      "remaining_cents": 15500,
+      "usage_percentage": 80.63,
+      "status": "warning",
+      "status_label": "Atenção"
+    }
+  ],
+  "summary": {
+    "total_budget_cents": 80000,
+    "total_spent_cents": 64500,
+    "total_remaining_cents": 15500,
+    "safe_count": 0,
+    "warning_count": 1,
+    "exceeded_count": 0
+  }
+}
+```
+
+`reference_date` é opcional — quando omitido, usa a data atual do servidor. O campo `category` reaproveita o mesmo formato do `CategoryResource` usado em todo o restante da API (por isso inclui `type`/`type_label`/`created_at`/`updated_at`, além de `id`/`name`/`color`/`icon`).
+
+### Regras de integridade
+
+- Todo orçamento pertence ao usuário autenticado; não é possível consultar, editar ou excluir orçamento de outro usuário (retorna `404`).
+- A categoria deve pertencer ao usuário autenticado e ser do tipo `expense` — categoria `income` é rejeitada.
+- `amount_cents` deve ser um inteiro positivo.
+- Não pode haver dois orçamentos ativos (não excluídos) para a mesma combinação usuário + categoria + `reference_month` + `reference_year`.
+- Excluir um orçamento é soft delete: preserva o histórico e não bloqueia a criação futura de um orçamento equivalente para o mesmo período.

@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -23,6 +24,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::apiResource('categories', CategoryController::class);
         Route::apiResource('transactions', TransactionController::class);
         Route::apiResource('recurrences', RecurrenceController::class);
+
+        Route::get('budgets/status', [BudgetController::class, 'status'])->name('budgets.status');
+        Route::apiResource('budgets', BudgetController::class);
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
         Route::post('transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
