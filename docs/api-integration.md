@@ -21,9 +21,22 @@ Todas as rotas abaixo exigem o header `Authorization: Bearer <token>` e operam i
 
 ## Recorrências (`/api/v1/recurrences`)
 
-> **Importante:** esta feature implementa apenas o **CRUD da regra de recorrência**. Ela **não gera transações automaticamente**. Não existem, ainda, scheduler, command, job de processamento ou dashboard associados a recorrências — isso fica para uma etapa futura.
+> **Importante:** esta feature implementa o **CRUD da regra de recorrência** e a **geração automática de transações** a partir dela. Dashboard, notificações, parcelamentos e relatórios **não fazem parte desta etapa**.
 
 Uma recorrência representa uma regra que descreve uma receita ou despesa recorrente (ex.: salário mensal, aluguel mensal, assinatura mensal, academia semanal, pagamento quinzenal, seguro anual). Ela pertence ao usuário autenticado, referencia uma conta (obrigatória) e opcionalmente uma categoria.
+
+### Geração automática de transações
+
+Toda recorrência **ativa** (`is_active = true`, não pausada, não excluída) gera transações **pendentes** automaticamente, uma por data de ocorrência, de acordo com sua `frequency`. Pontos importantes para o frontend:
+
+- **Onde aparecem:** as transações geradas são lançamentos normais e aparecem no endpoint já existente `GET /api/v1/transactions`, com os mesmos filtros e paginação. Não há um endpoint separado para "transações de recorrência".
+- **`recurrence_id`:** toda transação gerada a partir de uma regra retorna `recurrence_id` (o `id` da recorrência de origem) no payload de `GET /transactions`. Transações criadas manualmente (`POST /transactions`) continuam com `recurrence_id = null`.
+- **Status inicial:** toda ocorrência é criada com `status = pending`. Não há pagamento automático — o usuário confirma o pagamento normalmente via `POST /transactions/{id}/pay`.
+- **Janela de geração:** o backend gera ocorrências **futuras** dentro de uma janela configurável (`FINANCE_RECURRENCES_GENERATION_DAYS`, padrão 60 dias) a partir da data atual — assim uma transação não aparece somente no dia exato do vencimento. Recorrências pausadas, encerradas (`end_date` já ultrapassada) ou excluídas (soft delete) não geram novas ocorrências.
+- **Quem gera:** a geração acontece **apenas no backend**, via um processo agendado (scheduler diário) que roda o comando `finance:generate-recurring-transactions`. **Não existe endpoint público para forçar a geração manual.** Rodar o comando (ou o scheduler) mais de uma vez nunca duplica ocorrências — é seguro por design (idempotência garantida tanto na aplicação quanto por uma constraint única no banco).
+- **Dia do mês inexistente:** uma recorrência `monthly` no dia 31 cai no último dia dos meses menores (ex.: 31/01 → 28 ou 29/02 → 31/03 — sem "ficar presa" em 28 nos meses seguintes). O mesmo vale para uma recorrência `yearly` em 29/02: em anos não bissextos ela cai em 28/02, voltando para 29/02 no próximo ano bissexto.
+- **Campos herdados:** a transação gerada herda da regra: conta, categoria (quando houver), `type`, `entry_type`, `description`, `amount_cents`, `notes` e a data de ocorrência (como `due_date`).
+- A API de recorrência (`GET /recurrences`) não expõe, por ora, campos como "próxima ocorrência gerada" ou "total de transações geradas" além dos já documentados abaixo (`next_due_date` já existente reflete o avanço da regra após cada execução do gerador).
 
 ### Enum `frequency`
 
@@ -153,7 +166,7 @@ POST /api/v1/recurrences
 - `amount_cents` deve ser um inteiro positivo.
 - `entry_type` aceita apenas `fixed` ou `variable` — `single` é rejeitado.
 - `end_date` (quando enviada) e `next_due_date` não podem ser anteriores a `start_date`.
-- Pausar uma regra não a remove nem apaga seu histórico — apenas marca `is_active = false`.
+- Pausar uma regra não a remove nem apaga seu histórico — apenas marca `is_active = false`, o que também interrompe a geração automática de novas transações até que a regra seja retomada.
 - Excluir uma regra é soft delete: o registro não aparece mais nas listagens/consultas, mas não é removido fisicamente.
 
 ## Orçamentos (`/api/v1/budgets`)
