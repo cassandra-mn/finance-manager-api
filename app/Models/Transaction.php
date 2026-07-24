@@ -8,6 +8,7 @@ use App\Enum\TransactionStatus;
 use App\Enum\TransactionType;
 use App\Traits\BelongsToUser;
 use Database\Factories\TransactionFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -75,6 +76,21 @@ class Transaction extends Model
             && $this->due_date->lt(Carbon::today());
     }
 
+    public function isPending(): bool
+    {
+        return $this->status === TransactionStatus::PENDING;
+    }
+
+    public function isPaid(): bool
+    {
+        return $this->status === TransactionStatus::PAID;
+    }
+
+    public function isCancelled(): bool
+    {
+        return $this->status === TransactionStatus::CANCELLED;
+    }
+
     protected function displayStatus(): Attribute
     {
         return Attribute::get(fn (): TransactionDisplayStatus => match (true) {
@@ -85,9 +101,45 @@ class Transaction extends Model
         });
     }
 
-    public function scopeOverdue(Builder $query): Builder
+    #[Scope]
+    public function forUser(Builder $query, int $userId): Builder
     {
-        return $query->where('status', TransactionStatus::PENDING->value)
-            ->whereDate('due_date', '<', Carbon::today());
+        return $query->where('user_id', $userId);
+    }
+
+    #[Scope]
+    public function forRecurrence(Builder $query, int $recurrenceId): Builder
+    {
+        return $query->where('recurrence_id', $recurrenceId);
+    }
+
+    #[Scope]
+    public function dueOn(Builder $query, Carbon $date): Builder
+    {
+        return $query->whereDate('due_date', $date->toDateString());
+    }
+
+    #[Scope]
+    public function pending(Builder $query): Builder
+    {
+        return $query->where('status', TransactionStatus::PENDING->value);
+    }
+
+    #[Scope]
+    public function paid(Builder $query): Builder
+    {
+        return $query->where('status', TransactionStatus::PAID->value);
+    }
+
+    #[Scope]
+    public function cancelled(Builder $query): Builder
+    {
+        return $query->where('status', TransactionStatus::CANCELLED->value);
+    }
+
+    #[Scope]
+    public function overdue(Builder $query): Builder
+    {
+        return $query->pending()->whereDate('due_date', '<', Carbon::today());
     }
 }

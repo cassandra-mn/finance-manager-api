@@ -2,13 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Budgets\CreateBudgetAction;
-use App\Actions\Budgets\DeleteBudgetAction;
-use App\Actions\Budgets\GetBudgetStatusAction;
-use App\Actions\Budgets\UpdateBudgetAction;
-use App\Data\Budgets\BudgetFiltersData;
-use App\Data\Budgets\CreateBudgetData;
-use App\Data\Budgets\UpdateBudgetData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Budgets\BudgetStatusRequest;
 use App\Http\Requests\Budgets\ListBudgetsRequest;
@@ -16,26 +9,26 @@ use App\Http\Requests\Budgets\StoreBudgetRequest;
 use App\Http\Requests\Budgets\UpdateBudgetRequest;
 use App\Http\Resources\Budgets\BudgetResource;
 use App\Models\Budget;
-use App\Repositories\BudgetRepository;
+use App\Services\BudgetService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
-use Illuminate\Support\Carbon;
 
 class BudgetController extends Controller
 {
-    public function index(ListBudgetsRequest $request, BudgetRepository $repository): JsonResponse
+    public function __construct(
+        private readonly BudgetService $service,
+    ) {}
+
+    public function index(ListBudgetsRequest $request): JsonResponse
     {
-        $budgets = $repository->listForUser(
-            $request->user()->id,
-            BudgetFiltersData::fromRequest($request),
-        );
+        $budgets = $this->service->listForUser($request);
 
         return BudgetResource::collection($budgets)->response();
     }
 
-    public function store(StoreBudgetRequest $request, CreateBudgetAction $action): JsonResponse
+    public function store(StoreBudgetRequest $request): JsonResponse
     {
-        $budget = $action->execute(CreateBudgetData::fromRequest($request, $request->user()->id));
+        $budget = $this->service->create($request);
 
         return (new BudgetResource($budget->load('category')))
             ->response()
@@ -47,26 +40,22 @@ class BudgetController extends Controller
         return (new BudgetResource($budget->load('category')))->response();
     }
 
-    public function update(UpdateBudgetRequest $request, Budget $budget, UpdateBudgetAction $action): JsonResponse
+    public function update(UpdateBudgetRequest $request, Budget $budget): JsonResponse
     {
-        $budget = $action->execute($budget, UpdateBudgetData::fromRequest($request));
+        $budget = $this->service->update($budget, $request);
 
         return (new BudgetResource($budget->load('category')))->response();
     }
 
-    public function destroy(Budget $budget, DeleteBudgetAction $action): JsonResponse
+    public function destroy(Budget $budget): JsonResponse
     {
-        $action->execute($budget);
+        $this->service->delete($budget);
 
         return response()->json(null, Response::HTTP_NO_CONTENT);
     }
 
-    public function status(BudgetStatusRequest $request, GetBudgetStatusAction $action): JsonResponse
+    public function status(BudgetStatusRequest $request): JsonResponse
     {
-        $referenceDate = $request->filled('reference_date')
-            ? Carbon::parse($request->string('reference_date')->toString())
-            : Carbon::today();
-
-        return response()->json($action->execute($request->user()->id, $referenceDate));
+        return response()->json($this->service->getStatus($request));
     }
 }

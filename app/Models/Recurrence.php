@@ -7,11 +7,14 @@ use App\Enum\TransactionEntryType;
 use App\Enum\TransactionType;
 use App\Traits\BelongsToUser;
 use Database\Factories\RecurrenceFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 /**
  * @use HasFactory<RecurrenceFactory>
@@ -68,5 +71,23 @@ class Recurrence extends Model
     public function transactions(): HasMany
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    #[Scope]
+    public function forUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    #[Scope]
+    public function active(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
+    }
+
+    #[Scope]
+    public function dueBy(Builder $query, Carbon $date): Builder
+    {
+        return $query->where('next_due_date', '<=', $date->toDateString());
     }
 }

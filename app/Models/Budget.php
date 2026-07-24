@@ -4,6 +4,8 @@ namespace App\Models;
 
 use App\Traits\BelongsToUser;
 use Database\Factories\BudgetFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -37,5 +39,17 @@ class Budget extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(Category::class);
+    }
+
+    #[Scope]
+    public function forUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    #[Scope]
+    public function forPeriod(Builder $query, int $month, int $year): Builder
+    {
+        return $query->where('reference_month', $month)->where('reference_year', $year);
     }
 }

@@ -13,7 +13,7 @@ final class BudgetRepository
     public function listForUser(int $userId, BudgetFiltersData $filters): Collection
     {
         return Budget::query()
-            ->where('user_id', $userId)
+            ->forUser($userId)
             ->with('category')
             ->when($filters->categoryId, fn (Builder $query) => $query->where('category_id', $filters->categoryId))
             ->when($filters->referenceMonth, fn (Builder $query) => $query->where('reference_month', $filters->referenceMonth))
@@ -27,10 +27,27 @@ final class BudgetRepository
     public function listForPeriod(int $userId, int $month, int $year): Collection
     {
         return Budget::query()
-            ->where('user_id', $userId)
-            ->where('reference_month', $month)
-            ->where('reference_year', $year)
+            ->forUser($userId)
+            ->forPeriod($month, $year)
             ->with('category')
             ->get();
+    }
+
+    public function create(array $attributes): Budget
+    {
+        return Budget::create($attributes);
+    }
+
+    public function update(Budget $budget, array $attributes): Budget
+    {
+        $budget->fill($attributes);
+        $budget->save();
+
+        return $budget;
+    }
+
+    public function delete(Budget $budget): void
+    {
+        $budget->delete();
     }
 }

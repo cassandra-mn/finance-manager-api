@@ -5,6 +5,8 @@ namespace App\Models;
 use App\Enum\AccountType;
 use App\Traits\BelongsToUser;
 use Database\Factories\AccountFactory;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -45,5 +47,17 @@ class Account extends Model
     public function recurrences(): HasMany
     {
         return $this->hasMany(Recurrence::class);
+    }
+
+    #[Scope]
+    public function forUser(Builder $query, int $userId): Builder
+    {
+        return $query->where('user_id', $userId);
+    }
+
+    #[Scope]
+    public function active(Builder $query): Builder
+    {
+        return $query->where('is_active', true);
     }
 }

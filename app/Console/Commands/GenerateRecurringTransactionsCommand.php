@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Actions\Recurrences\GenerateRecurringTransactionsAction;
+use App\Services\RecurrenceService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Throwable;
@@ -14,12 +14,12 @@ class GenerateRecurringTransactionsCommand extends Command
 
     protected $description = 'Gera as transações pendentes de recorrências ativas dentro da janela de geração configurada.';
 
-    public function handle(GenerateRecurringTransactionsAction $action): int
+    public function handle(RecurrenceService $service): int
     {
         $referenceDate = $this->option('date') ? Carbon::parse($this->option('date')) : null;
 
         try {
-            $summary = $action->execute($referenceDate);
+            $summary = $service->generateOccurrences($referenceDate);
         } catch (Throwable $e) {
             $this->error("Falha inesperada ao gerar transações recorrentes: {$e->getMessage()}");
 

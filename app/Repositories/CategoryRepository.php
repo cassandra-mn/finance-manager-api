@@ -4,6 +4,7 @@ namespace App\Repositories;
 
 use App\Enum\TransactionType;
 use App\Models\Category;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
 
 final class CategoryRepository
@@ -12,9 +13,40 @@ final class CategoryRepository
     public function listForUser(int $userId, ?TransactionType $type = null): Collection
     {
         return Category::query()
-            ->where('user_id', $userId)
-            ->when($type, fn ($query) => $query->where('type', $type->value))
+            ->forUser($userId)
+            ->when($type, fn (Builder $query) => $query->ofType($type))
             ->orderBy('name')
             ->get();
+    }
+
+    public function create(array $attributes): Category
+    {
+        return Category::create($attributes);
+    }
+
+    /** @param  list<array<string, mixed>>  $rows */
+    public function createMany(array $rows): void
+    {
+        foreach ($rows as $row) {
+            Category::create($row);
+        }
+    }
+
+    public function update(Category $category, array $attributes): Category
+    {
+        $category->fill($attributes);
+        $category->save();
+
+        return $category;
+    }
+
+    public function delete(Category $category): void
+    {
+        $category->delete();
+    }
+
+    public function existsById(int $categoryId): bool
+    {
+        return Category::query()->whereKey($categoryId)->exists();
     }
 }

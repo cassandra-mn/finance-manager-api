@@ -2,39 +2,32 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Transactions\CancelTransactionAction;
-use App\Actions\Transactions\CreateTransactionAction;
-use App\Actions\Transactions\DeleteTransactionAction;
-use App\Actions\Transactions\MarkTransactionAsPaidAction;
-use App\Actions\Transactions\UpdateTransactionAction;
-use App\Data\Transactions\CreateTransactionData;
-use App\Data\Transactions\TransactionFiltersData;
-use App\Data\Transactions\UpdateTransactionData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Transactions\ListTransactionsRequest;
 use App\Http\Requests\Transactions\StoreTransactionRequest;
 use App\Http\Requests\Transactions\UpdateTransactionRequest;
 use App\Http\Resources\Transactions\TransactionResource;
 use App\Models\Transaction;
-use App\Repositories\TransactionRepository;
+use App\Services\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
 
 class TransactionController extends Controller
 {
-    public function index(ListTransactionsRequest $request, TransactionRepository $repository): JsonResponse
+    public function __construct(
+        private readonly TransactionService $service,
+    ) {}
+
+    public function index(ListTransactionsRequest $request): JsonResponse
     {
-        $transactions = $repository->paginateForUser(
-            $request->user()->id,
-            TransactionFiltersData::fromRequest($request),
-        );
+        $transactions = $this->service->paginateForUser($request);
 
         return TransactionResource::collection($transactions)->response();
     }
 
-    public function store(StoreTransactionRequest $request, CreateTransactionAction $action): JsonResponse
+    public function store(StoreTransactionRequest $request): JsonResponse
     {
-        $transaction = $action->execute(CreateTransactionData::fromRequest($request, $request->user()->id));
+        $transaction = $this->service->create($request);
 
         return (new TransactionResource($transaction->load(['account', 'category'])))
             ->response()
@@ -46,30 +39,30 @@ class TransactionController extends Controller
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
 
-    public function update(UpdateTransactionRequest $request, Transaction $transaction, UpdateTransactionAction $action): JsonResponse
+    public function update(UpdateTransactionRequest $request, Transaction $transaction): JsonResponse
     {
-        $transaction = $action->execute($transaction, UpdateTransactionData::fromRequest($request));
+        $transaction = $this->service->update($transaction, $request);
 
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
 
-    public function destroy(Transaction $transaction, DeleteTransactionAction $action): JsonResponse
+    public function destroy(Transaction $transaction): JsonResponse
     {
-        $action->execute($transaction);
+        $this->service->delete($transaction);
 
         return response()->json(null, Response::HTTP_NO_CONTENT);
     }
 
-    public function pay(Transaction $transaction, MarkTransactionAsPaidAction $action): JsonResponse
+    public function pay(Transaction $transaction): JsonResponse
     {
-        $transaction = $action->execute($transaction);
+        $transaction = $this->service->markAsPaid($transaction);
 
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
 
-    public function cancel(Transaction $transaction, CancelTransactionAction $action): JsonResponse
+    public function cancel(Transaction $transaction): JsonResponse
     {
-        $transaction = $action->execute($transaction);
+        $transaction = $this->service->cancel($transaction);
 
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }

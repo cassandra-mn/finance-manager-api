@@ -11,8 +11,34 @@ final class AccountRepository
     public function listForUser(int $userId): Collection
     {
         return Account::query()
-            ->where('user_id', $userId)
+            ->forUser($userId)
             ->orderBy('name')
             ->get();
+    }
+
+    public function create(array $attributes): Account
+    {
+        return Account::create($attributes);
+    }
+
+    public function update(Account $account, array $attributes): Account
+    {
+        $account->fill($attributes);
+        $account->save();
+
+        return $account;
+    }
+
+    public function delete(Account $account): void
+    {
+        $account->delete();
+    }
+
+    public function existsActiveById(int $accountId): bool
+    {
+        return Account::query()
+            ->whereKey($accountId)
+            ->active()
+            ->exists();
     }
 }

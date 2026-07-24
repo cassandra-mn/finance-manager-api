@@ -2,36 +2,32 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Categories\CreateCategoryAction;
-use App\Actions\Categories\DeleteCategoryAction;
-use App\Actions\Categories\UpdateCategoryAction;
-use App\Data\Categories\CreateCategoryData;
-use App\Data\Categories\UpdateCategoryData;
-use App\Enum\TransactionType;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Categories\ListCategoriesRequest;
 use App\Http\Requests\Categories\StoreCategoryRequest;
 use App\Http\Requests\Categories\UpdateCategoryRequest;
 use App\Http\Resources\Categories\CategoryResource;
 use App\Models\Category;
-use App\Repositories\CategoryRepository;
+use App\Services\CategoryService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class CategoryController extends Controller
 {
-    public function index(Request $request, CategoryRepository $repository): JsonResponse
-    {
-        $type = $request->filled('type') ? TransactionType::from($request->string('type')->toString()) : null;
+    public function __construct(
+        private readonly CategoryService $service,
+    ) {}
 
-        $categories = $repository->listForUser($request->user()->id, $type);
+    public function index(ListCategoriesRequest $request): JsonResponse
+    {
+        $categories = $this->service->listForUser($request);
 
         return CategoryResource::collection($categories)->response();
     }
 
-    public function store(StoreCategoryRequest $request, CreateCategoryAction $action): JsonResponse
+    public function store(StoreCategoryRequest $request): JsonResponse
     {
-        $category = $action->execute(CreateCategoryData::fromRequest($request, $request->user()->id));
+        $category = $this->service->create($request);
 
         return (new CategoryResource($category))->response()->setStatusCode(Response::HTTP_CREATED);
     }
@@ -41,16 +37,16 @@ class CategoryController extends Controller
         return (new CategoryResource($category))->response();
     }
 
-    public function update(UpdateCategoryRequest $request, Category $category, UpdateCategoryAction $action): JsonResponse
+    public function update(UpdateCategoryRequest $request, Category $category): JsonResponse
     {
-        $category = $action->execute($category, UpdateCategoryData::fromRequest($request));
+        $category = $this->service->update($category, $request);
 
         return (new CategoryResource($category))->response();
     }
 
-    public function destroy(Category $category, DeleteCategoryAction $action): JsonResponse
+    public function destroy(Category $category): JsonResponse
     {
-        $action->execute($category);
+        $this->service->delete($category);
 
         return response()->json(null, Response::HTTP_NO_CONTENT);
     }

@@ -2,33 +2,32 @@
 
 namespace App\Http\Controllers\Api\V1;
 
-use App\Actions\Accounts\CreateAccountAction;
-use App\Actions\Accounts\DeleteAccountAction;
-use App\Actions\Accounts\UpdateAccountAction;
-use App\Data\Accounts\CreateAccountData;
-use App\Data\Accounts\UpdateAccountData;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Accounts\StoreAccountRequest;
 use App\Http\Requests\Accounts\UpdateAccountRequest;
 use App\Http\Resources\Accounts\AccountResource;
 use App\Models\Account;
-use App\Repositories\AccountRepository;
+use App\Services\AccountService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 
 class AccountController extends Controller
 {
-    public function index(Request $request, AccountRepository $repository): JsonResponse
+    public function __construct(
+        private readonly AccountService $service,
+    ) {}
+
+    public function index(Request $request): JsonResponse
     {
-        $accounts = $repository->listForUser($request->user()->id);
+        $accounts = $this->service->listForUser($request->user()->id);
 
         return AccountResource::collection($accounts)->response();
     }
 
-    public function store(StoreAccountRequest $request, CreateAccountAction $action): JsonResponse
+    public function store(StoreAccountRequest $request): JsonResponse
     {
-        $account = $action->execute(CreateAccountData::fromRequest($request, $request->user()->id));
+        $account = $this->service->create($request);
 
         return (new AccountResource($account))->response()->setStatusCode(Response::HTTP_CREATED);
     }
@@ -38,16 +37,16 @@ class AccountController extends Controller
         return (new AccountResource($account))->response();
     }
 
-    public function update(UpdateAccountRequest $request, Account $account, UpdateAccountAction $action): JsonResponse
+    public function update(UpdateAccountRequest $request, Account $account): JsonResponse
     {
-        $account = $action->execute($account, UpdateAccountData::fromRequest($request));
+        $account = $this->service->update($account, $request);
 
         return (new AccountResource($account))->response();
     }
 
-    public function destroy(Account $account, DeleteAccountAction $action): JsonResponse
+    public function destroy(Account $account): JsonResponse
     {
-        $action->execute($account);
+        $this->service->delete($account);
 
         return response()->json(null, Response::HTTP_NO_CONTENT);
     }
