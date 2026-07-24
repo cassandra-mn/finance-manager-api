@@ -10,6 +10,7 @@ set -e
 # don't depend on runtime secrets, so they stay in the build (see Dockerfile).
 php artisan config:cache
 php artisan migrate --force
+php artisan db:seed --class=DemoSeeder --force
 
 # The commands above may create/touch files as root; keep ownership
 # consistent with the user PHP-FPM workers run as before handing off.
