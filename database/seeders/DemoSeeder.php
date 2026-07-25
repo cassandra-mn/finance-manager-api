@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Actions\Recurrences\GenerateRecurringTransactionsAction;
 use App\Enum\AccountType;
 use App\Enum\RecurrenceFrequency;
 use App\Enum\TransactionEntryType;
@@ -14,6 +13,7 @@ use App\Models\Category;
 use App\Models\Recurrence;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\RecurrenceService;
 use App\Support\RecurrenceDateResolver;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Carbon;
@@ -40,7 +40,7 @@ class DemoSeeder extends Seeder
             $this->createOneOffTransactions($user, $accounts, $categories);
             $this->createBudgets($user, $categories);
 
-            app(GenerateRecurringTransactionsAction::class)->execute();
+            app(RecurrenceService::class)->generateOccurrences();
         });
     }
 
