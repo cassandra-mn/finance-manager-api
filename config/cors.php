@@ -17,7 +17,7 @@ return [
 
     'allowed_methods' => ['*'],
 
-    'allowed_origins' => array_filter(explode(',', (string) env('ALLOWED_ORIGINS', 'http://localhost:3000'))),
+    'allowed_origins' => array_filter(explode(',', (string) env('ALLOWED_ORIGINS', '*'))),
 
     'allowed_origins_patterns' => [],
 
