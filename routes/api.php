@@ -12,6 +12,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::prefix('auth')->name('auth.')->group(function (): void {
         Route::post('register', [AuthController::class, 'register'])->name('register');
         Route::post('login', [AuthController::class, 'login'])->name('login');
+        Route::post('google', [AuthController::class, 'google'])->name('google');
 
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
