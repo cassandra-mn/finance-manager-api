@@ -8,10 +8,26 @@ A API usa Laravel Sanctum com token Bearer.
 
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
+- `POST /api/v1/auth/google`
 - `POST /api/v1/auth/logout` *(autenticado)*
 - `GET /api/v1/auth/me` *(autenticado)*
 
 Todas as rotas abaixo exigem o header `Authorization: Bearer <token>` e operam isoladas por usuário: um recurso que pertence a outro usuário sempre retorna **404**, nunca 403.
+
+### Login com Google (`POST /auth/google`)
+
+Recebe o ID token (JWT) emitido pelo [Google Identity Services](https://developers.google.com/identity/gsi/web) no frontend e devolve o mesmo formato de resposta de `/auth/login`/`/auth/register`.
+
+```json
+POST /api/v1/auth/google
+
+{ "credential": "<id_token JWT emitido pelo Google>" }
+```
+
+- O backend valida a assinatura do token contra as chaves públicas do Google (`https://www.googleapis.com/oauth2/v3/certs`, cacheadas por 6h), o emissor (`iss`) e a audiência (`aud`, que deve bater com a env `GOOGLE_CLIENT_ID`).
+- Se já existir uma conta com o `email` do token, ela é vinculada ao Google (`google_id` preenchido) e usada para login — não cria conta duplicada.
+- Se não existir, uma conta nova é criada (retorna `201`; contas existentes retornam `200`, mesmo comportamento automático do `JsonResource` usado em `/auth/register`).
+- `credential` ausente, expirado, com assinatura inválida ou audiência incorreta retorna `422` com erro no campo `credential`.
 
 ## Recursos existentes (resumo)
 

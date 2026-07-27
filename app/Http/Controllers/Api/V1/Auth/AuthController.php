@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Auth\GoogleLoginRequest;
 use App\Http\Requests\Auth\LoginRequest;
 use App\Http\Requests\Auth\RegisterRequest;
 use App\Http\Resources\Auth\AuthTokenResource;
@@ -30,6 +31,13 @@ class AuthController extends Controller
     public function login(LoginRequest $request): JsonResponse
     {
         $result = $this->service->login($request);
+
+        return (new AuthTokenResource($result['user'], $result['token']))->response();
+    }
+
+    public function google(GoogleLoginRequest $request): JsonResponse
+    {
+        $result = $this->service->loginWithGoogle($request);
 
         return (new AuthTokenResource($result['user'], $result['token']))->response();
     }
