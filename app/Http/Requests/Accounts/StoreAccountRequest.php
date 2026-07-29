@@ -19,6 +19,7 @@ class StoreAccountRequest extends FormRequest
             'name' => ['required', 'string', 'max:255'],
             'type' => ['required', new Enum(AccountType::class)],
             'initial_balance_cents' => ['required', 'integer'],
+            'credit_limit_cents' => ['nullable', 'integer', 'min:0'],
             'color' => ['nullable', 'string', 'max:20'],
         ];
     }

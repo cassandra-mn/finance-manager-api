@@ -20,6 +20,7 @@ class AccountResource extends JsonResource
             'type' => $this->type,
             'type_label' => $this->type->label(),
             'initial_balance_cents' => $this->initial_balance_cents,
+            'credit_limit_cents' => $this->credit_limit_cents,
             'current_balance_cents' => $currentBalance->cents,
             'color' => $this->color,
             'is_active' => $this->is_active,

@@ -24,6 +24,7 @@ class Account extends Model
         'name',
         'type',
         'initial_balance_cents',
+        'credit_limit_cents',
         'color',
         'is_active',
     ];
@@ -33,6 +34,7 @@ class Account extends Model
         return [
             'type' => AccountType::class,
             'initial_balance_cents' => 'integer',
+            'credit_limit_cents' => 'integer',
             'is_active' => 'boolean',
         ];
     }

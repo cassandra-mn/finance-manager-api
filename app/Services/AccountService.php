@@ -35,6 +35,7 @@ final class AccountService
                 'name' => $data->name,
                 'type' => $data->type,
                 'initial_balance_cents' => $data->initialBalanceCents,
+                'credit_limit_cents' => $data->creditLimitCents,
                 'color' => $data->color,
             ]);
         } catch (Throwable $e) {
@@ -56,6 +57,7 @@ final class AccountService
                 'name' => $data->name,
                 'type' => $data->type,
                 'initial_balance_cents' => $data->initialBalanceCents,
+                'credit_limit_cents' => $data->creditLimitCents,
                 'color' => $data->color,
                 'is_active' => $data->isActive,
             ], static fn (mixed $value): bool => $value !== null));

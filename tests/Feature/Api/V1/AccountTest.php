@@ -36,6 +36,39 @@ class AccountTest extends TestCase
         $this->assertDatabaseHas('accounts', ['name' => 'Conta Corrente']);
     }
 
+    public function test_user_can_create_a_credit_card_account_with_a_limit(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->postJson('/api/v1/accounts', [
+            'name' => 'Nubank',
+            'type' => AccountType::CREDIT_CARD->value,
+            'initial_balance_cents' => 0,
+            'credit_limit_cents' => 500000,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('name', 'Nubank')
+            ->assertJsonPath('credit_limit_cents', 500000);
+
+        $this->assertDatabaseHas('accounts', ['name' => 'Nubank', 'credit_limit_cents' => 500000]);
+    }
+
+    public function test_user_can_update_the_credit_limit_of_an_account(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create([
+            'type' => AccountType::CREDIT_CARD,
+            'credit_limit_cents' => 100000,
+        ]);
+
+        Sanctum::actingAs($user);
+
+        $this->putJson("/api/v1/accounts/{$account->id}", ['credit_limit_cents' => 300000])
+            ->assertOk()
+            ->assertJsonPath('credit_limit_cents', 300000);
+    }
+
     public function test_user_only_sees_their_own_accounts(): void
     {
         $userA = User::factory()->create();

@@ -12,6 +12,7 @@ final readonly class CreateAccountData
         public string $name,
         public AccountType $type,
         public int $initialBalanceCents,
+        public ?int $creditLimitCents,
         public ?string $color,
     ) {}
 
@@ -22,6 +23,7 @@ final readonly class CreateAccountData
             name: $request->string('name')->toString(),
             type: AccountType::from($request->string('type')->toString()),
             initialBalanceCents: (int) $request->integer('initial_balance_cents'),
+            creditLimitCents: $request->filled('credit_limit_cents') ? (int) $request->integer('credit_limit_cents') : null,
             color: $request->string('color')->toString() ?: null,
         );
     }

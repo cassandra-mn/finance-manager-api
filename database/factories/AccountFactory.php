@@ -19,6 +19,7 @@ class AccountFactory extends Factory
             'name' => fake()->words(2, true),
             'type' => fake()->randomElement(AccountType::cases()),
             'initial_balance_cents' => fake()->numberBetween(0, 500000),
+            'credit_limit_cents' => null,
             'color' => fake()->safeHexColor(),
             'is_active' => true,
         ];
