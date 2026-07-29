@@ -342,3 +342,37 @@ GET /api/v1/budgets/status?reference_date=2026-08-15
 - `amount_cents` deve ser um inteiro positivo.
 - Não pode haver dois orçamentos ativos (não excluídos) para a mesma combinação usuário + categoria + `reference_month` + `reference_year`.
 - Excluir um orçamento é soft delete: preserva o histórico e não bloqueia a criação futura de um orçamento equivalente para o mesmo período.
+
+## Evolução do fluxo de caixa (`GET /api/v1/cash-flow/evolution`)
+
+Retorna a série mensal de receitas, despesas e saldo do usuário autenticado, sempre isolada por usuário: um usuário sem nenhuma transação recebe todos os meses zerados, nunca dados de outro usuário.
+
+### Parâmetros (query string)
+
+| Parâmetro | Tipo | Observações |
+| --- | --- | --- |
+| `reference_date` | date | Opcional. Último mês incluído na série. Padrão: data atual do servidor. |
+| `months` | int | Opcional. Quantidade de meses na série, incluindo o mês de `reference_date`. Entre `1` e `24`. Padrão: `6`. |
+
+### Regras de cálculo
+
+Para cada mês da série, `income_cents` e `expense_cents` somam `amount_cents` das transações do usuário autenticado cujo `due_date` cai naquele mês e cujo `status` é **diferente** de `cancelled` (mesmo critério usado em `budgets/status`: `pending`, `paid` e `overdue` contam; `cancelled` nunca conta). `balance_cents = income_cents - expense_cents`.
+
+### Resposta
+
+```json
+GET /api/v1/cash-flow/evolution?reference_date=2026-07-29&months=3
+
+{
+  "data": [
+    { "year": 2026, "month": 5, "period": "2026-05", "income_cents": 0, "expense_cents": 0, "balance_cents": 0 },
+    { "year": 2026, "month": 6, "period": "2026-06", "income_cents": 500000, "expense_cents": 320000, "balance_cents": 180000 },
+    { "year": 2026, "month": 7, "period": "2026-07", "income_cents": 500000, "expense_cents": 410000, "balance_cents": 90000 }
+  ],
+  "summary": {
+    "total_income_cents": 1000000,
+    "total_expense_cents": 730000,
+    "total_balance_cents": 270000
+  }
+}
+```
