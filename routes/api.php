@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\V1\AccountController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\BudgetController;
+use App\Http\Controllers\Api\V1\CashFlowController;
 use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -28,6 +29,8 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('budgets/status', [BudgetController::class, 'status'])->name('budgets.status');
         Route::apiResource('budgets', BudgetController::class);
+
+        Route::get('cash-flow/evolution', [CashFlowController::class, 'evolution'])->name('cash-flow.evolution');
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
         Route::post('transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');

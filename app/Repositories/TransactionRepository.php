@@ -4,10 +4,12 @@ namespace App\Repositories;
 
 use App\Data\Transactions\TransactionFiltersData;
 use App\Enum\TransactionDisplayStatus;
+use App\Enum\TransactionStatus;
 use App\Models\Transaction;
 use App\Support\PeriodResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
 final class TransactionRepository
@@ -68,5 +70,16 @@ final class TransactionRepository
             ->forRecurrence($recurrenceId)
             ->dueOn($dueDate)
             ->exists();
+    }
+
+    /** @return Collection<int, Transaction> */
+    public function forPeriodByUser(int $userId, Carbon $start, Carbon $end): Collection
+    {
+        return Transaction::query()
+            ->forUser($userId)
+            ->where('status', '!=', TransactionStatus::CANCELLED->value)
+            ->whereBetween('due_date', [$start->toDateString(), $end->toDateString()])
+            ->select(['due_date', 'type', 'amount_cents'])
+            ->get();
     }
 }
