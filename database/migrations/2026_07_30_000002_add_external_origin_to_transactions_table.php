@@ -15,10 +15,10 @@ return new class extends Migration
             $table->string('origin')->default(TransactionOrigin::MANUAL->value)->after('external_id');
         });
 
-        // Dedup das transações importadas do Open Finance: nunca reimportar a
-        // mesma transação bancária para a mesma conta. Índice parcial — só se
-        // aplica a linhas com external_id preenchido e não excluídas, mesmo
-        // padrão de transactions_recurrence_due_date_unique.
+        // Dedup das transações importadas de um extrato (OFX/CSV): nunca
+        // reimportar a mesma transação bancária para a mesma conta. Índice
+        // parcial — só se aplica a linhas com external_id preenchido e não
+        // excluídas, mesmo padrão de transactions_recurrence_due_date_unique.
         DB::statement(
             'CREATE UNIQUE INDEX transactions_account_external_id_unique ON transactions (account_id, external_id) WHERE external_id IS NOT NULL AND deleted_at IS NULL'
         );

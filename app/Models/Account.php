@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Attributes\Scope;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
@@ -22,8 +21,6 @@ class Account extends Model
 
     protected $fillable = [
         'user_id',
-        'bank_connection_id',
-        'external_account_id',
         'name',
         'type',
         'initial_balance_cents',
@@ -35,7 +32,6 @@ class Account extends Model
     protected function casts(): array
     {
         return [
-            'bank_connection_id' => 'integer',
             'type' => AccountType::class,
             'initial_balance_cents' => 'integer',
             'credit_limit_cents' => 'integer',
@@ -55,10 +51,10 @@ class Account extends Model
         return $this->hasMany(Recurrence::class);
     }
 
-    /** @return BelongsTo<BankConnection, $this> */
-    public function bankConnection(): BelongsTo
+    /** @return HasMany<StatementImport, $this> */
+    public function statementImports(): HasMany
     {
-        return $this->belongsTo(BankConnection::class);
+        return $this->hasMany(StatementImport::class);
     }
 
     #[Scope]

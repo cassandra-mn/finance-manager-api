@@ -343,76 +343,67 @@ GET /api/v1/budgets/status?reference_date=2026-08-15
 - Não pode haver dois orçamentos ativos (não excluídos) para a mesma combinação usuário + categoria + `reference_month` + `reference_year`.
 - Excluir um orçamento é soft delete: preserva o histórico e não bloqueia a criação futura de um orçamento equivalente para o mesmo período.
 
-## Open Finance (`/api/v1/open-finance`)
+## Importação de extrato bancário (`/api/v1/accounts/{account}/statement-imports`)
 
-> **Importante:** esta feature implementa **conectar uma conta bancária e importar suas transações automaticamente**, usando o agregador [Pluggy](https://pluggy.ai) como provedor de Open Finance. **Sincronização de saldo bancário real, iniciação de pagamentos (Open Finance pagamentos) e suporte a múltiplos agregadores não fazem parte desta etapa.** O saldo exibido continua sendo sempre calculado a partir das transações (`current_balance_cents`, já existente em `AccountResource`), mesmo para contas importadas.
+> **Importante:** esta feature implementa **importar transações a partir de um arquivo de extrato (OFX ou CSV) exportado manualmente pelo usuário do internet banking/app do banco**, para uma conta já existente escolhida por ele. **Não há nenhuma integração automática/ao vivo com bancos** (nem Open Finance, nem agregadores como Pluggy/Belvo) — a atualização depende do usuário baixar e enviar o extrato periodicamente. Detecção/criação automática de conta a partir do arquivo, saldo bancário real e suporte a outros formatos de CSV (múltiplas colunas de débito/crédito, mapeamento salvo por banco) **não fazem parte desta etapa**.
 
-Uma **conexão bancária** (`BankConnection`) representa o vínculo entre o usuário e uma instituição financeira conectada via Pluggy. O backend nunca lida com credenciais bancárias diretamente — a Pluggy cuida disso — e guarda apenas o identificador da conexão (`pluggy_item_id`) retornado pelo widget de conexão.
+### Fluxo
 
-### Fluxo de conexão
-
-1. O frontend chama `POST /open-finance/connect-token` e recebe um `access_token` de curta duração.
-2. O frontend usa esse token para abrir o [Pluggy Connect](https://docs.pluggy.ai/docs/pluggy-connect) (widget hospedado pela Pluggy, fora desta API), onde o usuário escolhe o banco e informa suas credenciais diretamente à Pluggy.
-3. Ao concluir, o widget retorna um `item_id`. O frontend envia esse `item_id` para `POST /open-finance/connections`, que cria a `BankConnection` e dispara a primeira sincronização.
-4. A partir daí, a sincronização acontece automaticamente em segundo plano — via job agendado (cadência configurável em `OPEN_FINANCE_SYNC_INTERVAL_HOURS`, padrão a cada 1h) e via webhook da Pluggy — sem exigir nova ação do frontend. `POST /open-finance/connections/{id}/resync` está disponível para o usuário forçar uma sincronização imediata (ex.: botão "Sincronizar agora").
-5. Se a conexão cair em `status = login_error` (credenciais expiradas), o frontend deve pedir um novo `connect-token` passando o `item_id` existente (modo reconexão da Pluggy) e reabrir o widget.
+1. O usuário exporta o extrato do período desejado pelo internet banking/app do banco, em OFX (recomendado, formato padronizado) ou CSV.
+2. O frontend envia o arquivo para `POST /api/v1/accounts/{account}/statement-imports`, indicando a conta local em que as transações devem entrar.
+3. A API processa o arquivo de forma síncrona (sem fila/job) e responde com o resumo da importação: quantas transações foram criadas e quantas já existiam (reenviar o mesmo arquivo nunca duplica lançamentos).
+4. `GET /api/v1/accounts/{account}/statement-imports` lista o histórico de importações da conta, para auditoria.
 
 ### Endpoints
 
-Todos exigem autenticação (`Authorization: Bearer <token>`), exceto o webhook.
+Todos exigem autenticação (`Authorization: Bearer <token>`) e operam sobre uma conta do usuário autenticado (conta de outro usuário retorna `404`).
 
-- `POST /api/v1/open-finance/connect-token` — gera um token de curta duração para abrir o Pluggy Connect. Aceita `item_id` opcional no corpo para reconectar uma conexão existente (modo atualização de credenciais).
-- `GET /api/v1/open-finance/connections` — lista as conexões bancárias do usuário autenticado (array simples, sem paginação — mesmo padrão de `accounts`/`categories`/`recurrences`/`budgets`).
-- `POST /api/v1/open-finance/connections` — recebe `{ "item_id": "..." }` do widget e cria a conexão, disparando a sincronização inicial.
-- `GET /api/v1/open-finance/connections/{id}` — exibe uma conexão.
-- `POST /api/v1/open-finance/connections/{id}/resync` — força uma nova sincronização da conexão.
-- `DELETE /api/v1/open-finance/connections/{id}` — desconecta o banco (remove o item na Pluggy e faz soft delete da conexão localmente).
-- `POST /api/v1/open-finance/webhook` — endpoint público consumido pela Pluggy para avisar sobre mudanças (novo item, novas transações, etc.). Não é destinado ao frontend.
+- `POST /api/v1/accounts/{account}/statement-imports` — envia um arquivo de extrato (`multipart/form-data`) e importa as transações nele contidas para a conta.
+- `GET /api/v1/accounts/{account}/statement-imports` — lista o histórico de importações da conta (array simples, sem paginação — mesmo padrão de `accounts`/`categories`/`recurrences`/`budgets`), mais recente primeiro.
 
-### Resposta de uma conexão
+### Campos do upload (`POST`)
+
+| Campo | Tipo | Observações |
+| --- | --- | --- |
+| `file` | arquivo | Obrigatório. Extensões aceitas: `ofx`, `csv`, `txt`. Tamanho máximo configurável (`STATEMENT_IMPORTS_MAX_FILE_SIZE_KB`, padrão 5 MB). |
+| `format` | `ofx`\|`csv` | Obrigatório. Determina qual parser processa o arquivo — independente da extensão real do arquivo enviado. |
+| `date_column` | int | Obrigatório quando `format = csv`. Posição (0-indexed) da coluna de data. |
+| `description_column` | int | Obrigatório quando `format = csv`. Posição (0-indexed) da coluna de descrição. |
+| `amount_column` | int | Obrigatório quando `format = csv`. Posição (0-indexed) da coluna de valor — uma única coluna com sinal (negativo = despesa, positivo = receita). |
+| `date_format` | string | Obrigatório quando `format = csv`. Formato PHP `date()` da coluna de data (ex.: `d/m/Y` para `20/07/2026`). |
+| `delimiter` | string | Opcional, `format = csv`. Um único caractere separador de colunas. Padrão `,`. |
+| `has_header` | bool | Opcional, `format = csv`. Se `true` (padrão), a primeira linha é descartada como cabeçalho. |
+
+Para `format = ofx`, nenhum campo de mapeamento é necessário — o parser lê diretamente os blocos `<STMTTRN>` do arquivo (suporta tanto OFX 1.x/SGML quanto OFX 2.x/XML).
+
+### Resposta
 
 ```json
 {
   "id": 1,
-  "pluggy_item_id": "5cf1e2f9-...",
-  "institution_id": "201",
-  "institution_name": "Banco Teste",
-  "status": "updated",
-  "status_label": "Atualizado",
-  "last_synced_at": "2026-08-01T12:00:00.000000Z",
-  "last_sync_error": null,
-  "created_at": "2026-08-01T11:00:00.000000Z",
+  "account_id": 3,
+  "format": "ofx",
+  "format_label": "OFX",
+  "original_filename": "extrato-julho.ofx",
+  "transactions_created": 42,
+  "transactions_skipped": 3,
+  "created_at": "2026-08-01T12:00:00.000000Z",
   "updated_at": "2026-08-01T12:00:00.000000Z"
 }
 ```
 
-`pluggy_item_id` é exposto de propósito: o frontend precisa dele para solicitar um `connect-token` em modo reconexão quando `status = login_error`.
+`transactions_skipped` conta transações do arquivo que já haviam sido importadas anteriormente (dedup) — não é um sinal de erro.
 
-### Enum `status`
+### Transações importadas
 
-| Valor | Label (pt-BR) | Significado |
-| --- | --- | --- |
-| `updating` | Sincronizando | Sincronização em andamento na Pluggy. |
-| `updated` | Atualizado | Última sincronização concluída com sucesso. |
-| `login_error` | Erro de login | Credenciais expiradas — é necessário reconectar via widget. |
-| `outdated` | Desatualizado | Dados podem estar defasados; será tentado novamente automaticamente. |
-| `waiting_user_input` | Aguardando ação do usuário | A instituição exige uma ação adicional (ex.: MFA) no widget. |
-| `error` | Erro | Falha ao sincronizar; `last_sync_error` traz detalhes. |
-| `deleted` | Removido no banco | O item não existe mais do lado da Pluggy. |
-
-### Contas e transações importadas
-
-- Cada conta bancária conectada vira um registro normal em `GET /api/v1/accounts`, com `bank_connection_id` e `external_account_id` preenchidos (`null` para contas manuais). O tipo (`checking`/`savings`/`credit_card`) é inferido a partir do tipo/subtipo retornado pela Pluggy.
-- Cada transação importada aparece normalmente em `GET /api/v1/transactions`, com `origin = "open_finance"` (`"manual"` para lançamentos criados pelo usuário) e `external_id` preenchido com o identificador da transação na Pluggy.
-- Toda transação importada é criada com `status = "paid"` — representa um lançamento bancário já efetivado, diferente do fluxo `pending`/`paid` usado para lançamentos manuais/recorrências. Transações ainda `PENDING` do lado do banco não são importadas; entram automaticamente numa sincronização futura, quando a Pluggy as marcar como efetivadas.
+- Cada transação importada aparece normalmente em `GET /api/v1/transactions`, com `origin = "statement_import"` (`"manual"` para lançamentos criados pelo usuário) e `external_id` preenchido — no OFX, o `FITID` do banco (prefixado com `ofx:`); no CSV, um hash determinístico de data+descrição+valor (prefixado com `csv:`), já que CSV não traz um identificador único nativo.
+- Toda transação importada é criada com `status = "paid"` — representa um lançamento bancário já efetivado, diferente do fluxo `pending`/`paid` usado para lançamentos manuais/recorrências. No OFX, transações ainda `PENDING` do lado do banco (não liquidadas) são ignoradas.
 - `category_id` é sempre `null` em transações recém-importadas — a categorização é manual, feita normalmente pelo usuário via `PATCH /api/v1/transactions/{id}`.
-- Reexecutar a sincronização (agendada, via webhook ou manual) nunca duplica contas nem transações já importadas — idempotência garantida tanto na aplicação quanto por constraints únicas no banco.
-- Excluir (soft delete) uma conta importada localmente é respeitado: sincronizações futuras não a recriam.
-- Uma conta com `bank_connection_id` preenchido não pode ser excluída (`DELETE /api/v1/accounts/{id}`) enquanto a conexão bancária estiver ativa — a API retorna `422` pedindo para desconectar o banco primeiro.
+- Reenviar o mesmo arquivo (ou um arquivo com transações sobrepostas, ex.: extratos de períodos que se cruzam) nunca duplica lançamentos — idempotência garantida tanto na aplicação quanto por uma constraint única no banco (`account_id` + `external_id`).
 
 ### Regras de integridade
 
-- Toda conexão bancária pertence ao usuário autenticado; não é possível consultar, sincronizar ou desconectar uma conexão de outro usuário (retorna `404`).
-- Um mesmo `item_id` da Pluggy só pode estar associado a uma conexão não excluída por vez — tentar registrar o mesmo `item_id` duas vezes retorna `422`.
-- Desconectar um banco (`DELETE /connections/{id}`) é soft delete: **as contas e transações já importadas permanecem intactas** como dados locais normais, editáveis pelo usuário — apenas param de ser sincronizadas automaticamente.
-- Não há tentativa de mesclar uma conta manual existente com uma conta recém-conectada do mesmo banco — cada conta da Pluggy sempre gera uma nova conta local.
+- A conta de destino deve pertencer ao usuário autenticado.
+- Não há tentativa de detectar ou criar automaticamente uma conta a partir dos dados do arquivo — o usuário sempre escolhe a conta de destino explicitamente antes do upload.
+- `format = csv` exige todos os campos de mapeamento (`date_column`, `description_column`, `amount_column`, `date_format`); sem eles, a requisição retorna `422`.
+- Um arquivo com data ou valor ilegível numa linha específica não interrompe a importação — a linha é apenas ignorada e não conta em `transactions_created` nem `transactions_skipped`.

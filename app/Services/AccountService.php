@@ -11,7 +11,6 @@ use App\Models\Account;
 use App\Repositories\AccountRepository;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Validation\ValidationException;
 use Throwable;
 
 final class AccountService
@@ -74,12 +73,6 @@ final class AccountService
 
     public function delete(Account $account): void
     {
-        if ($account->bank_connection_id !== null && $account->bankConnection()->exists()) {
-            throw ValidationException::withMessages([
-                'bank_connection' => ['Desconecte o banco antes de excluir esta conta.'],
-            ]);
-        }
-
         try {
             $this->repository->delete($account);
         } catch (Throwable $e) {
