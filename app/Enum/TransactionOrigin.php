@@ -5,13 +5,13 @@ namespace App\Enum;
 enum TransactionOrigin: string
 {
     case MANUAL = 'manual';
-    case OPEN_FINANCE = 'open_finance';
+    case STATEMENT_IMPORT = 'statement_import';
 
     public function label(): string
     {
         return match ($this) {
             self::MANUAL => 'Manual',
-            self::OPEN_FINANCE => 'Open Finance',
+            self::STATEMENT_IMPORT => 'Importação de extrato',
         };
     }
 }
