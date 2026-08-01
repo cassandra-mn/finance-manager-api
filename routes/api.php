@@ -8,6 +8,8 @@ use App\Http\Controllers\Api\V1\CategoryController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\StatementImportController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Api\V1\WhatsApp\WhatsAppLinkController;
+use App\Http\Controllers\Api\V1\WhatsApp\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('v1')->name('api.v1.')->group(function (): void {
@@ -19,6 +21,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
             Route::get('me', [AuthController::class, 'me'])->name('me');
+        });
+    });
+
+    Route::prefix('whatsapp')->name('whatsapp.')->group(function (): void {
+        Route::get('webhook', [WhatsAppWebhookController::class, 'verify'])->name('webhook.verify');
+        Route::post('webhook', [WhatsAppWebhookController::class, 'handle'])
+            ->middleware('throttle:whatsapp-webhook')
+            ->name('webhook.handle');
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::post('link-code', [WhatsAppLinkController::class, 'generateCode'])->name('link-code');
+            Route::delete('link', [WhatsAppLinkController::class, 'unlink'])->name('unlink');
         });
     });
 

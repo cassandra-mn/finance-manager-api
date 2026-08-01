@@ -8,6 +8,7 @@ use App\Models\Transaction;
 use App\Support\PeriodResolver;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 
 final class TransactionRepository
@@ -73,5 +74,15 @@ final class TransactionRepository
     public function createFromExternal(array $attributes): Transaction
     {
         return Transaction::create($attributes);
+    }
+
+    /** @return Collection<int, Transaction> */
+    public function listRecentForUser(int $userId, int $limit = 5): Collection
+    {
+        return Transaction::query()
+            ->forUser($userId)
+            ->latest('due_date')
+            ->limit($limit)
+            ->get();
     }
 }

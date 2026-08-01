@@ -407,3 +407,42 @@ Para `format = ofx`, nenhum campo de mapeamento é necessário — o parser lê 
 - Não há tentativa de detectar ou criar automaticamente uma conta a partir dos dados do arquivo — o usuário sempre escolhe a conta de destino explicitamente antes do upload.
 - `format = csv` exige todos os campos de mapeamento (`date_column`, `description_column`, `amount_column`, `date_format`); sem eles, a requisição retorna `422`.
 - Um arquivo com data ou valor ilegível numa linha específica não interrompe a importação — a linha é apenas ignorada e não conta em `transactions_created` nem `transactions_skipped`.
+
+## WhatsApp (`/api/v1/whatsapp`)
+
+> **Importante:** esta feature implementa um chatbot reativo (o usuário manda mensagem primeiro, o bot responde) usando a API oficial do WhatsApp Cloud API (Meta), sem nenhum revendedor pago (Twilio, Zenvia, 360dialog etc.). O menu v1 cobre apenas **consulta** (saldo, últimas transações, status do orçamento) e **lançamento via texto livre** (reaproveitando o assistente de IA já existente em `POST /assistant/quick-add`). Gerenciar categorias, recorrências ou contas pelo bot **não faz parte desta etapa**.
+
+### Vincular o número de WhatsApp
+
+1. O app chama `POST /api/v1/whatsapp/link-code` (autenticado) e recebe um código numérico de 6 dígitos, válido por 10 minutos.
+2. O usuário envia esse código como mensagem de texto para o número de WhatsApp do bot.
+3. O bot reconhece o código, vincula o número à conta do usuário e responde com o menu principal.
+4. `DELETE /api/v1/whatsapp/link` (autenticado) desvincula o número — o histórico de contas/transações não é afetado, só o vínculo em si; qualquer confirmação pendente daquele número é descartada.
+
+### Endpoints
+
+- `POST /api/v1/whatsapp/link-code` *(autenticado)* → `{ "code": "123456", "expires_at": "..." }`.
+- `DELETE /api/v1/whatsapp/link` *(autenticado)* → `204`.
+- `GET /api/v1/whatsapp/webhook` — handshake de verificação exigido pela Meta ao cadastrar o webhook (não é destinado ao frontend).
+- `POST /api/v1/whatsapp/webhook` — recebe as mensagens do WhatsApp (não é destinado ao frontend). Verificado via assinatura HMAC (`X-Hub-Signature-256`), nunca via autenticação de usuário.
+
+### Menu principal (enviado ao vincular, ou ao receber "menu"/"oi"/"olá"/"ajuda")
+
+| Opção | O que faz |
+| --- | --- |
+| Ver saldo | Lista as contas do usuário com o saldo atual (`AccountBalanceService`, mesma lógica de `current_balance_cents` já usada em `AccountResource`). Até 10 contas; o excedente vira "e mais N contas". |
+| Últimas transações | As 5 transações mais recentes, uma linha por transação (data, descrição, valor). |
+| Status do orçamento | Consumo dos orçamentos do mês corrente, mesma lógica de `GET /budgets/status`. |
+| Adicionar transação | Pede para o usuário descrever o lançamento em texto livre (ex.: "gastei 50 reais no mercado") e interpreta via o mesmo assistente de IA do `quick-add`. |
+| Ajuda | Texto estático de ajuda. |
+
+### Lançar uma transação por texto livre
+
+O texto do usuário é interpretado pelo mesmo mecanismo de `POST /assistant/quick-add` (Gemini + validação reaproveitando as regras de `StoreAccountRequest`/`StoreTransactionRequest`). Se o pedido gerar uma ou mais ações (ex.: um parcelamento vira várias transações), o bot envia um resumo com botões **Confirmar**/**Cancelar** cobrindo o lote inteiro — não há confirmação ação por ação. Só ao confirmar as transações/contas são de fato criadas; cancelar não grava nada. Enquanto uma confirmação estiver pendente, qualquer mensagem que não seja o botão de confirmar/cancelar reenvia o mesmo prompt (a ação pendente nunca é descartada silenciosamente).
+
+### Regras de integridade
+
+- Um número de WhatsApp só pode estar vinculado a um usuário por vez; vincular o mesmo número a outra conta exige desvincular primeiro.
+- O código de vínculo é de uso único (consumido ao vincular com sucesso) e expira em 10 minutos.
+- Uma sessão de conversa parada (mais de `WHATSAPP_SESSION_TTL_MINUTES`, padrão 15 minutos, sem resposta a uma confirmação pendente) é resetada automaticamente na próxima mensagem recebida daquele número.
+- Transações lançadas pelo bot entram como `status = pending` (mesmo comportamento de um lançamento manual via `POST /transactions`), sem categoria (`category_id = null`) até o usuário categorizar.

@@ -41,4 +41,13 @@ final class AccountRepository
             ->active()
             ->exists();
     }
+
+    public function existsActiveForUser(int $userId, int $accountId): bool
+    {
+        return Account::query()
+            ->whereKey($accountId)
+            ->forUser($userId)
+            ->active()
+            ->exists();
+    }
 }
