@@ -4,6 +4,7 @@ namespace Tests\Feature\Api\V1;
 
 use App\Enum\AccountType;
 use App\Models\Account;
+use App\Models\BankConnection;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Sanctum\Sanctum;
@@ -129,6 +130,34 @@ class AccountTest extends TestCase
     {
         $user = User::factory()->create();
         $account = Account::factory()->for($user)->create();
+
+        Sanctum::actingAs($user);
+
+        $this->deleteJson("/api/v1/accounts/{$account->id}")->assertNoContent();
+
+        $this->assertSoftDeleted('accounts', ['id' => $account->id]);
+    }
+
+    public function test_cannot_delete_an_account_linked_to_an_active_bank_connection(): void
+    {
+        $user = User::factory()->create();
+        $connection = BankConnection::factory()->for($user)->create();
+        $account = Account::factory()->for($user)->create(['bank_connection_id' => $connection->id]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->deleteJson("/api/v1/accounts/{$account->id}");
+
+        $response->assertUnprocessable()->assertJsonValidationErrors(['bank_connection']);
+        $this->assertDatabaseHas('accounts', ['id' => $account->id, 'deleted_at' => null]);
+    }
+
+    public function test_can_delete_an_account_after_its_bank_connection_was_disconnected(): void
+    {
+        $user = User::factory()->create();
+        $connection = BankConnection::factory()->for($user)->create();
+        $account = Account::factory()->for($user)->create(['bank_connection_id' => $connection->id]);
+        $connection->delete();
 
         Sanctum::actingAs($user);
 

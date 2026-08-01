@@ -5,6 +5,8 @@ use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\OpenFinance\BankConnectionController;
+use App\Http\Controllers\Api\V1\OpenFinance\OpenFinanceWebhookController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\TransactionController;
 use Illuminate\Support\Facades\Route;
@@ -18,6 +20,18 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::middleware('auth:sanctum')->group(function (): void {
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
             Route::get('me', [AuthController::class, 'me'])->name('me');
+        });
+    });
+
+    Route::prefix('open-finance')->name('open-finance.')->group(function (): void {
+        Route::post('webhook', [OpenFinanceWebhookController::class, 'handle'])
+            ->middleware('throttle:60,1')
+            ->name('webhook');
+
+        Route::middleware('auth:sanctum')->group(function (): void {
+            Route::post('connect-token', [BankConnectionController::class, 'connectToken'])->name('connect-token');
+            Route::apiResource('connections', BankConnectionController::class)->only(['index', 'show', 'store', 'destroy']);
+            Route::post('connections/{connection}/resync', [BankConnectionController::class, 'resync'])->name('connections.resync');
         });
     });
 

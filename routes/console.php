@@ -1,6 +1,7 @@
 <?php
 
 use App\Console\Commands\GenerateRecurringTransactionsCommand;
+use App\Console\Commands\SyncOpenFinanceConnectionsCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schedule;
@@ -16,4 +17,10 @@ Artisan::command('inspire', function () {
 // isso sozinho.
 Schedule::command(GenerateRecurringTransactionsCommand::class)
     ->daily()
+    ->withoutOverlapping();
+
+// Sincronização periódica das conexões Open Finance (Pluggy), complementar
+// ao webhook — cadência configurável via OPEN_FINANCE_SYNC_INTERVAL_HOURS.
+Schedule::command(SyncOpenFinanceConnectionsCommand::class)
+    ->cron('0 */'.max(1, (int) config('open_finance.sync.interval_hours')).' * * *')
     ->withoutOverlapping();
