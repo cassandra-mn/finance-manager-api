@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enum\TransactionDisplayStatus;
 use App\Enum\TransactionEntryType;
+use App\Enum\TransactionOrigin;
 use App\Enum\TransactionStatus;
 use App\Enum\TransactionType;
 use App\Traits\BelongsToUser;
@@ -29,6 +30,8 @@ class Transaction extends Model
         'account_id',
         'category_id',
         'recurrence_id',
+        'external_id',
+        'origin',
         'type',
         'entry_type',
         'status',
@@ -45,6 +48,7 @@ class Transaction extends Model
             'type' => TransactionType::class,
             'entry_type' => TransactionEntryType::class,
             'status' => TransactionStatus::class,
+            'origin' => TransactionOrigin::class,
             'amount_cents' => 'integer',
             'due_date' => 'date',
             'paid_at' => 'datetime',

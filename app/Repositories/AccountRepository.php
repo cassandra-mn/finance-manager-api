@@ -41,4 +41,24 @@ final class AccountRepository
             ->active()
             ->exists();
     }
+
+    /**
+     * Busca (incluindo soft-deleted) a conta local já importada para uma
+     * conta externa da Pluggy. Sem escopo de usuário autenticado — usada
+     * pela sincronização, que roda fora de um contexto de request.
+     */
+    public function findByExternalAccount(int $bankConnectionId, string $externalAccountId): ?Account
+    {
+        return Account::query()
+            ->withoutGlobalScope('belongsToUser')
+            ->withTrashed()
+            ->where('bank_connection_id', $bankConnectionId)
+            ->where('external_account_id', $externalAccountId)
+            ->first();
+    }
+
+    public function createFromExternal(array $attributes): Account
+    {
+        return Account::create($attributes);
+    }
 }

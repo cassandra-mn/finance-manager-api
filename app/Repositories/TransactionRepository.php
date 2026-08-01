@@ -69,4 +69,9 @@ final class TransactionRepository
             ->dueOn($dueDate)
             ->exists();
     }
+
+    public function createFromExternal(array $attributes): Transaction
+    {
+        return Transaction::create($attributes);
+    }
 }

@@ -342,3 +342,77 @@ GET /api/v1/budgets/status?reference_date=2026-08-15
 - `amount_cents` deve ser um inteiro positivo.
 - Não pode haver dois orçamentos ativos (não excluídos) para a mesma combinação usuário + categoria + `reference_month` + `reference_year`.
 - Excluir um orçamento é soft delete: preserva o histórico e não bloqueia a criação futura de um orçamento equivalente para o mesmo período.
+
+## Open Finance (`/api/v1/open-finance`)
+
+> **Importante:** esta feature implementa **conectar uma conta bancária e importar suas transações automaticamente**, usando o agregador [Pluggy](https://pluggy.ai) como provedor de Open Finance. **Sincronização de saldo bancário real, iniciação de pagamentos (Open Finance pagamentos) e suporte a múltiplos agregadores não fazem parte desta etapa.** O saldo exibido continua sendo sempre calculado a partir das transações (`current_balance_cents`, já existente em `AccountResource`), mesmo para contas importadas.
+
+Uma **conexão bancária** (`BankConnection`) representa o vínculo entre o usuário e uma instituição financeira conectada via Pluggy. O backend nunca lida com credenciais bancárias diretamente — a Pluggy cuida disso — e guarda apenas o identificador da conexão (`pluggy_item_id`) retornado pelo widget de conexão.
+
+### Fluxo de conexão
+
+1. O frontend chama `POST /open-finance/connect-token` e recebe um `access_token` de curta duração.
+2. O frontend usa esse token para abrir o [Pluggy Connect](https://docs.pluggy.ai/docs/pluggy-connect) (widget hospedado pela Pluggy, fora desta API), onde o usuário escolhe o banco e informa suas credenciais diretamente à Pluggy.
+3. Ao concluir, o widget retorna um `item_id`. O frontend envia esse `item_id` para `POST /open-finance/connections`, que cria a `BankConnection` e dispara a primeira sincronização.
+4. A partir daí, a sincronização acontece automaticamente em segundo plano — via job agendado (cadência configurável em `OPEN_FINANCE_SYNC_INTERVAL_HOURS`, padrão a cada 1h) e via webhook da Pluggy — sem exigir nova ação do frontend. `POST /open-finance/connections/{id}/resync` está disponível para o usuário forçar uma sincronização imediata (ex.: botão "Sincronizar agora").
+5. Se a conexão cair em `status = login_error` (credenciais expiradas), o frontend deve pedir um novo `connect-token` passando o `item_id` existente (modo reconexão da Pluggy) e reabrir o widget.
+
+### Endpoints
+
+Todos exigem autenticação (`Authorization: Bearer <token>`), exceto o webhook.
+
+- `POST /api/v1/open-finance/connect-token` — gera um token de curta duração para abrir o Pluggy Connect. Aceita `item_id` opcional no corpo para reconectar uma conexão existente (modo atualização de credenciais).
+- `GET /api/v1/open-finance/connections` — lista as conexões bancárias do usuário autenticado (array simples, sem paginação — mesmo padrão de `accounts`/`categories`/`recurrences`/`budgets`).
+- `POST /api/v1/open-finance/connections` — recebe `{ "item_id": "..." }` do widget e cria a conexão, disparando a sincronização inicial.
+- `GET /api/v1/open-finance/connections/{id}` — exibe uma conexão.
+- `POST /api/v1/open-finance/connections/{id}/resync` — força uma nova sincronização da conexão.
+- `DELETE /api/v1/open-finance/connections/{id}` — desconecta o banco (remove o item na Pluggy e faz soft delete da conexão localmente).
+- `POST /api/v1/open-finance/webhook` — endpoint público consumido pela Pluggy para avisar sobre mudanças (novo item, novas transações, etc.). Não é destinado ao frontend.
+
+### Resposta de uma conexão
+
+```json
+{
+  "id": 1,
+  "pluggy_item_id": "5cf1e2f9-...",
+  "institution_id": "201",
+  "institution_name": "Banco Teste",
+  "status": "updated",
+  "status_label": "Atualizado",
+  "last_synced_at": "2026-08-01T12:00:00.000000Z",
+  "last_sync_error": null,
+  "created_at": "2026-08-01T11:00:00.000000Z",
+  "updated_at": "2026-08-01T12:00:00.000000Z"
+}
+```
+
+`pluggy_item_id` é exposto de propósito: o frontend precisa dele para solicitar um `connect-token` em modo reconexão quando `status = login_error`.
+
+### Enum `status`
+
+| Valor | Label (pt-BR) | Significado |
+| --- | --- | --- |
+| `updating` | Sincronizando | Sincronização em andamento na Pluggy. |
+| `updated` | Atualizado | Última sincronização concluída com sucesso. |
+| `login_error` | Erro de login | Credenciais expiradas — é necessário reconectar via widget. |
+| `outdated` | Desatualizado | Dados podem estar defasados; será tentado novamente automaticamente. |
+| `waiting_user_input` | Aguardando ação do usuário | A instituição exige uma ação adicional (ex.: MFA) no widget. |
+| `error` | Erro | Falha ao sincronizar; `last_sync_error` traz detalhes. |
+| `deleted` | Removido no banco | O item não existe mais do lado da Pluggy. |
+
+### Contas e transações importadas
+
+- Cada conta bancária conectada vira um registro normal em `GET /api/v1/accounts`, com `bank_connection_id` e `external_account_id` preenchidos (`null` para contas manuais). O tipo (`checking`/`savings`/`credit_card`) é inferido a partir do tipo/subtipo retornado pela Pluggy.
+- Cada transação importada aparece normalmente em `GET /api/v1/transactions`, com `origin = "open_finance"` (`"manual"` para lançamentos criados pelo usuário) e `external_id` preenchido com o identificador da transação na Pluggy.
+- Toda transação importada é criada com `status = "paid"` — representa um lançamento bancário já efetivado, diferente do fluxo `pending`/`paid` usado para lançamentos manuais/recorrências. Transações ainda `PENDING` do lado do banco não são importadas; entram automaticamente numa sincronização futura, quando a Pluggy as marcar como efetivadas.
+- `category_id` é sempre `null` em transações recém-importadas — a categorização é manual, feita normalmente pelo usuário via `PATCH /api/v1/transactions/{id}`.
+- Reexecutar a sincronização (agendada, via webhook ou manual) nunca duplica contas nem transações já importadas — idempotência garantida tanto na aplicação quanto por constraints únicas no banco.
+- Excluir (soft delete) uma conta importada localmente é respeitado: sincronizações futuras não a recriam.
+- Uma conta com `bank_connection_id` preenchido não pode ser excluída (`DELETE /api/v1/accounts/{id}`) enquanto a conexão bancária estiver ativa — a API retorna `422` pedindo para desconectar o banco primeiro.
+
+### Regras de integridade
+
+- Toda conexão bancária pertence ao usuário autenticado; não é possível consultar, sincronizar ou desconectar uma conexão de outro usuário (retorna `404`).
+- Um mesmo `item_id` da Pluggy só pode estar associado a uma conexão não excluída por vez — tentar registrar o mesmo `item_id` duas vezes retorna `422`.
+- Desconectar um banco (`DELETE /connections/{id}`) é soft delete: **as contas e transações já importadas permanecem intactas** como dados locais normais, editáveis pelo usuário — apenas param de ser sincronizadas automaticamente.
+- Não há tentativa de mesclar uma conta manual existente com uma conta recém-conectada do mesmo banco — cada conta da Pluggy sempre gera uma nova conta local.
