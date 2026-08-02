@@ -66,4 +66,38 @@ final class BudgetStatusService
 
         return BudgetStatus::SAFE;
     }
+
+    /**
+     * Estende calculate() com uma extrapolação linear simples do gasto até o
+     * fim do período ("nesse ritmo, vai gastar X"), com base no ritmo de
+     * gasto até agora. $daysElapsed/$daysInPeriod entram como parâmetros
+     * explícitos (não calculados aqui) para o método continuar puro e
+     * testável sem depender do relógio, e para o chamador reaproveitar os
+     * mesmos valores no envelope de resposta.
+     *
+     * @param  Collection<int, Budget>  $budgets
+     * @return array<int, array{budget: Budget, spent_cents: int, remaining_cents: int, usage_percentage: float, status: BudgetStatus, projected_spent_cents: int, projected_overrun_cents: int, is_projected_to_exceed: bool}>
+     */
+    public function calculateWithProjection(int $userId, Collection $budgets, int $month, int $year, int $daysElapsed, int $daysInPeriod): array
+    {
+        $entries = $this->calculate($userId, $budgets, $month, $year);
+
+        return array_map(function (array $entry) use ($daysElapsed, $daysInPeriod): array {
+            $spentCents = $entry['spent_cents'];
+            $amountCents = $entry['budget']->amount_cents;
+
+            // Multiplica antes de dividir para não passar por float.
+            $projectedSpentCents = $daysElapsed > 0
+                ? intdiv($spentCents * $daysInPeriod, $daysElapsed)
+                : $spentCents;
+
+            $projectedOverrunCents = max(0, $projectedSpentCents - $amountCents);
+
+            return $entry + [
+                'projected_spent_cents' => $projectedSpentCents,
+                'projected_overrun_cents' => $projectedOverrunCents,
+                'is_projected_to_exceed' => $projectedSpentCents > $amountCents,
+            ];
+        }, $entries);
+    }
 }

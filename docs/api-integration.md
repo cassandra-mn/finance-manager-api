@@ -343,6 +343,118 @@ GET /api/v1/budgets/status?reference_date=2026-08-15
 - Não pode haver dois orçamentos ativos (não excluídos) para a mesma combinação usuário + categoria + `reference_month` + `reference_year`.
 - Excluir um orçamento é soft delete: preserva o histórico e não bloqueia a criação futura de um orçamento equivalente para o mesmo período.
 
+## Insights (`/api/v1/insights`)
+
+> **Importante:** as seções de Recorrências e Orçamentos, acima, deferiram explicitamente "dashboard/relatórios" para uma etapa futura — esta é essa etapa, mas só para três análises específicas: **comparação de períodos + top categorias**, **detecção de gasto anômalo** e **projeção de estouro de orçamento**. Previsão de fluxo de caixa, detecção de recorrência não cadastrada e comparação/sugestões baseadas em dados agregados entre usuários **não fazem parte desta etapa** (ver "Fora de escopo" no fim desta seção).
+
+Todos os endpoints exigem autenticação (`Authorization: Bearer <token>`) e operam apenas sobre os dados do usuário autenticado.
+
+### Endpoints
+
+- `GET /api/v1/insights/spending-summary` — compara receita/despesa do período atual com o período anterior equivalente, e retorna o ranking das categorias que mais pesaram no gasto.
+- `GET /api/v1/insights/anomalies` — para cada categoria com gasto no período atual, compara com a média histórica dos períodos anteriores e sinaliza desvios acima de um limiar.
+- `GET /api/v1/insights/budget-projection` — estende `GET /budgets/status` com uma projeção linear do gasto até o fim do mês.
+
+### `GET /insights/spending-summary`
+
+Parâmetros (query string, todos opcionais):
+
+| Parâmetro | Tipo | Padrão |
+| --- | --- | --- |
+| `period` | `week`\|`fortnight`\|`month`\|`quarter`\|`year` | `month` |
+| `reference_date` | `YYYY-MM-DD` | hoje |
+| `top_categories` | int, entre 1 e 20 | `INSIGHTS_TOP_CATEGORIES` (padrão 5) |
+
+```json
+GET /api/v1/insights/spending-summary?period=month&reference_date=2026-08-15
+
+{
+  "reference_period": {
+    "period": "month",
+    "current": { "from": "2026-08-01", "to": "2026-08-31" },
+    "previous": { "from": "2026-07-01", "to": "2026-07-31" }
+  },
+  "data": {
+    "current": { "income_cents": 500000, "expense_cents": 320000 },
+    "previous": { "income_cents": 480000, "expense_cents": 290000 },
+    "delta": { "income_cents": 20000, "expense_cents": 30000, "income_percentage": 4.17, "expense_percentage": 10.34 },
+    "top_categories": [
+      { "category_id": 3, "category_name": "Alimentação", "category_color": "#f97316", "amount_cents": 120000, "percentage_of_total": 37.5 }
+    ],
+    "others_cents": 120000
+  },
+  "summary": { "total_expense_cents": 320000, "top_categories_count": 5 }
+}
+```
+
+`income_percentage`/`expense_percentage` vêm `null` quando não há dado no período anterior para comparar (divisão por zero indefinida, não reportada como `0%` ou `100%`). `others_cents` soma o gasto de todas as categorias fora do top N.
+
+### `GET /insights/anomalies`
+
+| Parâmetro | Tipo | Padrão |
+| --- | --- | --- |
+| `period` | mesmo enum acima | `month` |
+| `reference_date` | `YYYY-MM-DD` | hoje |
+| `lookback_periods` | int, entre 1 e 12 | `INSIGHTS_ANOMALY_LOOKBACK_PERIODS` (padrão 3) |
+| `threshold_percentage` | int, mínimo 1 | `INSIGHTS_ANOMALY_THRESHOLD_PERCENTAGE` (padrão 40) |
+
+```json
+GET /api/v1/insights/anomalies?lookback_periods=3&threshold_percentage=40
+
+{
+  "reference_period": {
+    "period": "month",
+    "current": { "from": "2026-08-01", "to": "2026-08-31" },
+    "lookback_periods": 3,
+    "historical_window": { "from": "2026-05-01", "to": "2026-07-31" }
+  },
+  "data": [
+    { "category_id": 3, "category_name": "Alimentação", "category_color": "#f97316", "current_cents": 120000, "average_cents": 70000, "deviation_percentage": 71.43, "is_anomalous": true, "is_new_category": false }
+  ],
+  "summary": { "threshold_percentage": 40, "anomalies_count": 1, "new_categories_count": 0 }
+}
+```
+
+`data` traz **todas** as categorias com gasto no período (não só as anômalas) — cada uma com a flag `is_anomalous`, mesmo padrão de "lista tudo com status" já usado em `budgets/status`. Uma categoria sem nenhum histórico nos períodos anteriores (`average_cents = 0`) mas com gasto agora vem com `is_new_category = true` e `deviation_percentage = null` (não há base para calcular desvio), e é sempre marcada `is_anomalous = true`.
+
+### `GET /insights/budget-projection`
+
+Aceita `reference_date` (`YYYY-MM-DD`, opcional, padrão hoje). A projeção **só é calculada para o mês corrente** — para qualquer outro mês, `reference_period.projection_applicable` vem `false` e os campos `projected_*`/`is_projected_to_exceed` vêm `null` (a resposta ainda traz o status normal de orçamento, igual a `budgets/status`).
+
+```json
+GET /api/v1/insights/budget-projection?reference_date=2026-08-15
+
+{
+  "reference_period": {
+    "month": 8, "year": 2026, "from": "2026-08-01", "to": "2026-08-31",
+    "days_in_period": 31, "days_elapsed": 15, "days_remaining": 16,
+    "projection_applicable": true
+  },
+  "data": [
+    {
+      "id": 1,
+      "category": { "id": 3, "name": "Alimentação", "type": "expense", "type_label": "Despesa", "color": "#f97316", "icon": null, "created_at": "...", "updated_at": "..." },
+      "amount_cents": 80000, "spent_cents": 45000, "remaining_cents": 35000,
+      "usage_percentage": 56.25, "status": "safe", "status_label": "Dentro do limite",
+      "projected_spent_cents": 93000, "projected_overrun_cents": 13000, "is_projected_to_exceed": true
+    }
+  ],
+  "summary": { "total_budget_cents": 80000, "total_spent_cents": 45000, "total_projected_spent_cents": 93000, "budgets_projected_to_exceed_count": 1 }
+}
+```
+
+### Regras de integridade
+
+- Todos os cálculos usam a mesma convenção de "gasto" já usada em `budgets/status`: soma transações com `status` diferente de `cancelled` (ou seja, `pending` e `paid` contam, `cancelled` nunca conta).
+- Toda comparação de limiar (`is_anomalous`, `is_projected_to_exceed`) é feita com aritmética inteira em centavos, nunca float — evita erro de arredondamento exatamente na borda do limiar. Campos como `usage_percentage`/`deviation_percentage`/`*_percentage` são só apresentação.
+- A média histórica em `anomalies` arredonda para baixo (`intdiv`) — deliberado, deixa o limiar um pouco mais difícil de disparar.
+- `period=quarter` e `period=year` também passaram a valer no filtro já existente `GET /transactions?period=`, como efeito colateral de terem sido adicionados ao enum `TransactionPeriod`.
+- Todo endpoint é escopado ao usuário autenticado; dados de outro usuário nunca aparecem.
+
+### Fora de escopo
+
+Previsão de fluxo de caixa, detecção de recorrência não cadastrada (cobrança repetida que o usuário nunca cadastrou como `Recurrence`), e comparação/sugestões de economia baseadas em dados agregados entre usuários (exigiria infraestrutura de dados anônimos entre contas, inexistente hoje) **não fazem parte desta etapa**. Tela de dashboard no frontend consumindo estes endpoints também fica para uma etapa futura.
+
 ## Importação de extrato bancário (`/api/v1/accounts/{account}/statement-imports`)
 
 > **Importante:** esta feature implementa **importar transações a partir de um arquivo de extrato (OFX ou CSV) exportado manualmente pelo usuário do internet banking/app do banco**, para uma conta já existente escolhida por ele. **Não há nenhuma integração automática/ao vivo com bancos** (nem Open Finance, nem agregadores como Pluggy/Belvo) — a atualização depende do usuário baixar e enviar o extrato periodicamente. Detecção/criação automática de conta a partir do arquivo, saldo bancário real e suporte a outros formatos de CSV (múltiplas colunas de débito/crédito, mapeamento salvo por banco) **não fazem parte desta etapa**.
@@ -407,3 +519,42 @@ Para `format = ofx`, nenhum campo de mapeamento é necessário — o parser lê 
 - Não há tentativa de detectar ou criar automaticamente uma conta a partir dos dados do arquivo — o usuário sempre escolhe a conta de destino explicitamente antes do upload.
 - `format = csv` exige todos os campos de mapeamento (`date_column`, `description_column`, `amount_column`, `date_format`); sem eles, a requisição retorna `422`.
 - Um arquivo com data ou valor ilegível numa linha específica não interrompe a importação — a linha é apenas ignorada e não conta em `transactions_created` nem `transactions_skipped`.
+
+## WhatsApp (`/api/v1/whatsapp`)
+
+> **Importante:** esta feature implementa um chatbot reativo (o usuário manda mensagem primeiro, o bot responde) usando a API oficial do WhatsApp Cloud API (Meta), sem nenhum revendedor pago (Twilio, Zenvia, 360dialog etc.). O menu v1 cobre apenas **consulta** (saldo, últimas transações, status do orçamento) e **lançamento via texto livre** (reaproveitando o assistente de IA já existente em `POST /assistant/quick-add`). Gerenciar categorias, recorrências ou contas pelo bot **não faz parte desta etapa**.
+
+### Vincular o número de WhatsApp
+
+1. O app chama `POST /api/v1/whatsapp/link-code` (autenticado) e recebe um código numérico de 6 dígitos, válido por 10 minutos.
+2. O usuário envia esse código como mensagem de texto para o número de WhatsApp do bot.
+3. O bot reconhece o código, vincula o número à conta do usuário e responde com o menu principal.
+4. `DELETE /api/v1/whatsapp/link` (autenticado) desvincula o número — o histórico de contas/transações não é afetado, só o vínculo em si; qualquer confirmação pendente daquele número é descartada.
+
+### Endpoints
+
+- `POST /api/v1/whatsapp/link-code` *(autenticado)* → `{ "code": "123456", "expires_at": "..." }`.
+- `DELETE /api/v1/whatsapp/link` *(autenticado)* → `204`.
+- `GET /api/v1/whatsapp/webhook` — handshake de verificação exigido pela Meta ao cadastrar o webhook (não é destinado ao frontend).
+- `POST /api/v1/whatsapp/webhook` — recebe as mensagens do WhatsApp (não é destinado ao frontend). Verificado via assinatura HMAC (`X-Hub-Signature-256`), nunca via autenticação de usuário.
+
+### Menu principal (enviado ao vincular, ou ao receber "menu"/"oi"/"olá"/"ajuda")
+
+| Opção | O que faz |
+| --- | --- |
+| Ver saldo | Lista as contas do usuário com o saldo atual (`AccountBalanceService`, mesma lógica de `current_balance_cents` já usada em `AccountResource`). Até 10 contas; o excedente vira "e mais N contas". |
+| Últimas transações | As 5 transações mais recentes, uma linha por transação (data, descrição, valor). |
+| Status do orçamento | Consumo dos orçamentos do mês corrente, mesma lógica de `GET /budgets/status`. |
+| Adicionar transação | Pede para o usuário descrever o lançamento em texto livre (ex.: "gastei 50 reais no mercado") e interpreta via o mesmo assistente de IA do `quick-add`. |
+| Ajuda | Texto estático de ajuda. |
+
+### Lançar uma transação por texto livre
+
+O texto do usuário é interpretado pelo mesmo mecanismo de `POST /assistant/quick-add` (Gemini + validação reaproveitando as regras de `StoreAccountRequest`/`StoreTransactionRequest`). Se o pedido gerar uma ou mais ações (ex.: um parcelamento vira várias transações), o bot envia um resumo com botões **Confirmar**/**Cancelar** cobrindo o lote inteiro — não há confirmação ação por ação. Só ao confirmar as transações/contas são de fato criadas; cancelar não grava nada. Enquanto uma confirmação estiver pendente, qualquer mensagem que não seja o botão de confirmar/cancelar reenvia o mesmo prompt (a ação pendente nunca é descartada silenciosamente).
+
+### Regras de integridade
+
+- Um número de WhatsApp só pode estar vinculado a um usuário por vez; vincular o mesmo número a outra conta exige desvincular primeiro.
+- O código de vínculo é de uso único (consumido ao vincular com sucesso) e expira em 10 minutos.
+- Uma sessão de conversa parada (mais de `WHATSAPP_SESSION_TTL_MINUTES`, padrão 15 minutos, sem resposta a uma confirmação pendente) é resetada automaticamente na próxima mensagem recebida daquele número.
+- Transações lançadas pelo bot entram como `status = pending` (mesmo comportamento de um lançamento manual via `POST /transactions`), sem categoria (`category_id = null`) até o usuário categorizar.

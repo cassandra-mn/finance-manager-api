@@ -11,6 +11,11 @@ final class UserRepository
         return User::query()->where('email', $email)->first();
     }
 
+    public function findById(int $id): ?User
+    {
+        return User::query()->find($id);
+    }
+
     public function findByGoogleId(string $googleId): ?User
     {
         return User::query()->where('google_id', $googleId)->first();
@@ -24,6 +29,21 @@ final class UserRepository
     public function linkGoogleId(User $user, string $googleId): void
     {
         $user->forceFill(['google_id' => $googleId])->save();
+    }
+
+    public function findByWhatsAppNumber(string $number): ?User
+    {
+        return User::query()->where('whatsapp_number', $number)->first();
+    }
+
+    public function linkWhatsAppNumber(User $user, string $number): void
+    {
+        $user->forceFill(['whatsapp_number' => $number])->save();
+    }
+
+    public function unlinkWhatsAppNumber(User $user): void
+    {
+        $user->forceFill(['whatsapp_number' => null])->save();
     }
 
     public function issueToken(User $user, string $name): string

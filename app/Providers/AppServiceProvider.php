@@ -31,5 +31,11 @@ class AppServiceProvider extends ServiceProvider
                 Limit::perDay(50)->by($request->user()?->id ?: $request->ip()),
             ];
         });
+
+        RateLimiter::for('whatsapp-webhook', function (Request $request) {
+            $from = collect($request->input('entry.0.changes.0.value.messages', []))->first()['from'] ?? null;
+
+            return [Limit::perMinute(20)->by($from ?? $request->ip())];
+        });
     }
 }
