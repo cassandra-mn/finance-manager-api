@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\InsightsController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\StatementImportController;
 use App\Http\Controllers\Api\V1\TransactionController;
@@ -53,6 +54,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('accounts/{account}/statement-imports', [StatementImportController::class, 'index'])->name('accounts.statement-imports.index');
         Route::post('accounts/{account}/statement-imports', [StatementImportController::class, 'store'])->name('accounts.statement-imports.store');
+
+        Route::prefix('insights')->name('insights.')->group(function (): void {
+            Route::get('spending-summary', [InsightsController::class, 'spendingSummary'])->name('spending-summary');
+            Route::get('anomalies', [InsightsController::class, 'anomalies'])->name('anomalies');
+            Route::get('budget-projection', [InsightsController::class, 'budgetProjection'])->name('budget-projection');
+        });
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {
             Route::post('assistant/quick-add', [AssistantController::class, 'quickAdd'])->name('assistant.quick-add');
