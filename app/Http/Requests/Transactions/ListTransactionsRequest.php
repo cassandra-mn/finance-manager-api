@@ -29,6 +29,8 @@ class ListTransactionsRequest extends FormRequest
             'from' => ['sometimes', 'date'],
             'to' => ['sometimes', 'date', 'after_or_equal:from'],
             'search' => ['sometimes', 'string', 'max:255'],
+            'transaction_group_id' => ['sometimes', 'integer'],
+            'grouped' => ['sometimes', 'in:true,false,0,1'],
             'per_page' => ['sometimes', 'integer', 'min:1', 'max:'.Pagination::MAX_PER_PAGE],
         ];
     }

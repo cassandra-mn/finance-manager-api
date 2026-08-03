@@ -16,6 +16,11 @@ final class AccountRepository
             ->get();
     }
 
+    public function find(int $accountId): ?Account
+    {
+        return Account::query()->find($accountId);
+    }
+
     public function create(array $attributes): Account
     {
         return Account::create($attributes);

@@ -30,6 +30,7 @@ class Transaction extends Model
         'account_id',
         'category_id',
         'recurrence_id',
+        'transaction_group_id',
         'external_id',
         'origin',
         'type',
@@ -73,6 +74,17 @@ class Transaction extends Model
         return $this->belongsTo(Recurrence::class);
     }
 
+    /** @return BelongsTo<TransactionGroup, $this> */
+    public function group(): BelongsTo
+    {
+        return $this->belongsTo(TransactionGroup::class, 'transaction_group_id');
+    }
+
+    public function isGrouped(): bool
+    {
+        return $this->transaction_group_id !== null;
+    }
+
     public function isOverdue(): bool
     {
         return $this->status === TransactionStatus::PENDING
@@ -102,6 +114,33 @@ class Transaction extends Model
             $this->status === TransactionStatus::PAID => TransactionDisplayStatus::PAID,
             $this->isOverdue() => TransactionDisplayStatus::OVERDUE,
             default => TransactionDisplayStatus::PENDING,
+        });
+    }
+
+    /**
+     * Quando a transação pertence a um agrupador (ex.: fatura de cartão), ela
+     * não tem status de pago próprio — quem está "pago" é a fatura. Este
+     * accessor delega ao status da fatura nesse caso; fora disso, é igual a
+     * displayStatus.
+     */
+    protected function effectiveDisplayStatus(): Attribute
+    {
+        return Attribute::get(function (): TransactionDisplayStatus {
+            if (! $this->isGrouped()) {
+                return $this->display_status;
+            }
+
+            $group = $this->group;
+
+            if ($group === null) {
+                return $this->display_status;
+            }
+
+            return match (true) {
+                $group->isPaid() => TransactionDisplayStatus::PAID,
+                $group->isOverdue() => TransactionDisplayStatus::OVERDUE,
+                default => TransactionDisplayStatus::PENDING,
+            };
         });
     }
 

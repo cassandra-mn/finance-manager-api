@@ -45,6 +45,7 @@ class AccountTest extends TestCase
             'type' => AccountType::CREDIT_CARD->value,
             'initial_balance_cents' => 0,
             'credit_limit_cents' => 500000,
+            'invoice_due_day' => 10,
         ]);
 
         $response->assertCreated()
@@ -52,6 +53,41 @@ class AccountTest extends TestCase
             ->assertJsonPath('credit_limit_cents', 500000);
 
         $this->assertDatabaseHas('accounts', ['name' => 'Nubank', 'credit_limit_cents' => 500000]);
+    }
+
+    /**
+     * invoice_due_day não é obrigatório na criação (o assistente de IA, por
+     * exemplo, cria cartões sem essa informação) — sem ele, compras no cartão
+     * simplesmente não são agrupadas em fatura até o usuário configurá-lo.
+     */
+    public function test_credit_card_account_can_be_created_without_invoice_due_day(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->postJson('/api/v1/accounts', [
+            'name' => 'Nubank',
+            'type' => AccountType::CREDIT_CARD->value,
+            'initial_balance_cents' => 0,
+        ]);
+
+        $response->assertCreated()->assertJsonPath('invoice_due_day', null);
+    }
+
+    public function test_credit_card_without_explicit_closing_day_computes_it_from_the_due_day(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->postJson('/api/v1/accounts', [
+            'name' => 'Nubank',
+            'type' => AccountType::CREDIT_CARD->value,
+            'initial_balance_cents' => 0,
+            'invoice_due_day' => 10,
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('invoice_due_day', 10)
+            ->assertJsonPath('invoice_closing_day', null)
+            ->assertJsonPath('effective_invoice_closing_day', 28);
     }
 
     public function test_user_can_update_the_credit_limit_of_an_account(): void

@@ -4,6 +4,7 @@ namespace App\Http\Resources\Transactions;
 
 use App\Http\Resources\Accounts\AccountResource;
 use App\Http\Resources\Categories\CategoryResource;
+use App\Http\Resources\TransactionGroups\TransactionGroupResource;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -24,12 +25,16 @@ class TransactionResource extends JsonResource
             'status' => $this->status,
             'display_status' => $this->display_status,
             'display_status_label' => $this->display_status->label(),
+            'effective_status' => $this->effective_display_status,
+            'effective_status_label' => $this->effective_display_status->label(),
             'description' => $this->description,
             'amount_cents' => $this->amount_cents,
             'due_date' => $this->due_date?->toDateString(),
             'paid_at' => $this->paid_at,
             'notes' => $this->notes,
             'recurrence_id' => $this->recurrence_id,
+            'transaction_group_id' => $this->transaction_group_id,
+            'group' => new TransactionGroupResource($this->whenLoaded('group')),
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
         ];

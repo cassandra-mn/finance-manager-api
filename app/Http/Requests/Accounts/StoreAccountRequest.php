@@ -20,6 +20,8 @@ class StoreAccountRequest extends FormRequest
             'type' => ['required', new Enum(AccountType::class)],
             'initial_balance_cents' => ['required', 'integer'],
             'credit_limit_cents' => ['nullable', 'integer', 'min:0'],
+            'invoice_due_day' => ['nullable', 'integer', 'between:1,31'],
+            'invoice_closing_day' => ['nullable', 'integer', 'between:1,31'],
             'color' => ['nullable', 'string', 'max:20'],
         ];
     }

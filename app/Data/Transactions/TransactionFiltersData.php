@@ -22,6 +22,8 @@ final readonly class TransactionFiltersData
         public ?Carbon $from = null,
         public ?Carbon $to = null,
         public ?string $search = null,
+        public ?int $transactionGroupId = null,
+        public ?bool $grouped = null,
         public int $perPage = Pagination::DEFAULT_PER_PAGE,
     ) {}
 
@@ -37,6 +39,8 @@ final readonly class TransactionFiltersData
             from: $request->filled('from') ? Carbon::parse($request->string('from')->toString()) : null,
             to: $request->filled('to') ? Carbon::parse($request->string('to')->toString()) : null,
             search: $request->string('search')->toString() ?: null,
+            transactionGroupId: $request->filled('transaction_group_id') ? (int) $request->integer('transaction_group_id') : null,
+            grouped: $request->has('grouped') ? $request->boolean('grouped') : null,
             perPage: $request->filled('per_page')
                 ? min((int) $request->integer('per_page'), Pagination::MAX_PER_PAGE)
                 : Pagination::DEFAULT_PER_PAGE,

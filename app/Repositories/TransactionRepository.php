@@ -25,6 +25,10 @@ final class TransactionRepository
             ->when($filters->type, fn (Builder $query) => $query->where('type', $filters->type->value))
             ->when($filters->entryType, fn (Builder $query) => $query->where('entry_type', $filters->entryType->value))
             ->when($filters->search, fn (Builder $query) => $query->where('description', 'ilike', "%{$filters->search}%"))
+            ->when($filters->transactionGroupId, fn (Builder $query) => $query->where('transaction_group_id', $filters->transactionGroupId))
+            ->when(! is_null($filters->grouped), fn (Builder $query) => $filters->grouped
+                ? $query->whereNotNull('transaction_group_id')
+                : $query->whereNull('transaction_group_id'))
             ->when($filters->status, fn (Builder $query) => $this->applyStatusFilter($query, $filters->status))
             ->when($filters->period, function (Builder $query) use ($filters): void {
                 [$from, $to] = PeriodResolver::resolve($filters->period);

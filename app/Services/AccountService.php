@@ -36,6 +36,8 @@ final class AccountService
                 'type' => $data->type,
                 'initial_balance_cents' => $data->initialBalanceCents,
                 'credit_limit_cents' => $data->creditLimitCents,
+                'invoice_due_day' => $data->invoiceDueDay,
+                'invoice_closing_day' => $data->invoiceClosingDay,
                 'color' => $data->color,
             ]);
         } catch (Throwable $e) {
@@ -58,6 +60,8 @@ final class AccountService
                 'type' => $data->type,
                 'initial_balance_cents' => $data->initialBalanceCents,
                 'credit_limit_cents' => $data->creditLimitCents,
+                'invoice_due_day' => $data->invoiceDueDay,
+                'invoice_closing_day' => $data->invoiceClosingDay,
                 'color' => $data->color,
                 'is_active' => $data->isActive,
             ], static fn (mixed $value): bool => $value !== null));
