@@ -105,6 +105,8 @@ class TransactionGroupTest extends TestCase
         $response->assertCreated();
         $this->assertNotNull($response->json('transaction_group_id'));
         $this->assertSame('pending', $response->json('effective_status'));
+        $this->assertSame($response->json('transaction_group_id'), $response->json('group.id'));
+        $this->assertSame('open', $response->json('group.status'));
         $this->assertSame('pending', $response->json('status'));
     }
 
