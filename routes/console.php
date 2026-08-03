@@ -1,5 +1,6 @@
 <?php
 
+use App\Console\Commands\CloseDueCreditCardInvoicesCommand;
 use App\Console\Commands\GenerateRecurringTransactionsCommand;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -15,5 +16,11 @@ Artisan::command('inspire', function () {
 // `php artisan schedule:work` em um worker dedicado) — nada aqui dispara
 // isso sozinho.
 Schedule::command(GenerateRecurringTransactionsCommand::class)
+    ->daily()
+    ->withoutOverlapping();
+
+// Fechamento diário das faturas de cartão de crédito cujo dia de fechamento
+// já passou — mesma ressalva de scheduler acima.
+Schedule::command(CloseDueCreditCardInvoicesCommand::class)
     ->daily()
     ->withoutOverlapping();

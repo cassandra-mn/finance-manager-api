@@ -5,12 +5,14 @@ namespace App\Services;
 use App\Data\Transactions\CreateTransactionData;
 use App\Data\Transactions\TransactionFiltersData;
 use App\Data\Transactions\UpdateTransactionData;
+use App\Enum\AccountType;
 use App\Enum\TransactionStatus;
 use App\Exceptions\ServiceException;
 use App\Http\Requests\Transactions\ListTransactionsRequest;
 use App\Http\Requests\Transactions\StoreTransactionRequest;
 use App\Http\Requests\Transactions\UpdateTransactionRequest;
 use App\Models\Transaction;
+use App\Repositories\AccountRepository;
 use App\Repositories\TransactionRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Carbon;
@@ -22,6 +24,8 @@ final class TransactionService
 {
     public function __construct(
         private readonly TransactionRepository $repository,
+        private readonly AccountRepository $accountRepository,
+        private readonly TransactionGroupService $transactionGroupService,
     ) {}
 
     public function paginateForUser(ListTransactionsRequest $request): LengthAwarePaginator
@@ -37,10 +41,19 @@ final class TransactionService
         $data = CreateTransactionData::fromRequest($request, $request->user()->id);
 
         try {
+            $account = $this->accountRepository->find($data->accountId);
+            $transactionGroupId = null;
+
+            if ($account?->type === AccountType::CREDIT_CARD && $account->invoice_due_day !== null) {
+                $transactionGroupId = $this->transactionGroupService
+                    ->resolveOrCreateForCreditCardPurchase($account, $data->dueDate)?->id;
+            }
+
             return $this->repository->create([
                 'user_id' => $data->userId,
                 'account_id' => $data->accountId,
                 'category_id' => $data->categoryId,
+                'transaction_group_id' => $transactionGroupId,
                 'type' => $data->type,
                 'entry_type' => $data->entryType,
                 'status' => TransactionStatus::PENDING,
@@ -61,6 +74,8 @@ final class TransactionService
 
     public function update(Transaction $transaction, UpdateTransactionRequest $request): Transaction
     {
+        $this->guardAgainstPaidGroup($transaction);
+
         $data = UpdateTransactionData::fromRequest($request);
 
         try {
@@ -86,6 +101,8 @@ final class TransactionService
 
     public function delete(Transaction $transaction): void
     {
+        $this->guardAgainstPaidGroup($transaction);
+
         try {
             $this->repository->delete($transaction);
         } catch (Throwable $e) {
@@ -100,6 +117,12 @@ final class TransactionService
 
     public function markAsPaid(Transaction $transaction): Transaction
     {
+        if ($transaction->isGrouped()) {
+            throw ValidationException::withMessages([
+                'status' => ['Esta transação faz parte de uma fatura — pague a fatura em vez da transação.'],
+            ]);
+        }
+
         if ($transaction->isCancelled()) {
             throw ValidationException::withMessages([
                 'status' => ['Não é possível pagar uma transação cancelada.'],
@@ -123,6 +146,12 @@ final class TransactionService
 
     public function cancel(Transaction $transaction): Transaction
     {
+        if ($transaction->isGrouped()) {
+            throw ValidationException::withMessages([
+                'status' => ['Esta transação faz parte de uma fatura — não pode ser cancelada individualmente.'],
+            ]);
+        }
+
         if ($transaction->isPaid()) {
             throw ValidationException::withMessages([
                 'status' => ['Não é possível cancelar uma transação já paga.'],
@@ -140,6 +169,15 @@ final class TransactionService
             ]);
 
             throw new ServiceException('Não foi possível cancelar a transação.', previous: $e);
+        }
+    }
+
+    private function guardAgainstPaidGroup(Transaction $transaction): void
+    {
+        if ($transaction->isGrouped() && $transaction->group?->isPaid()) {
+            throw ValidationException::withMessages([
+                'transaction_group_id' => ['Não é possível alterar uma transação de uma fatura já paga.'],
+            ]);
         }
     }
 }

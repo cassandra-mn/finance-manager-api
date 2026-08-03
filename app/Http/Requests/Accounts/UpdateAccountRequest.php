@@ -20,6 +20,8 @@ class UpdateAccountRequest extends FormRequest
             'type' => ['sometimes', new Enum(AccountType::class)],
             'initial_balance_cents' => ['sometimes', 'integer'],
             'credit_limit_cents' => ['sometimes', 'nullable', 'integer', 'min:0'],
+            'invoice_due_day' => ['sometimes', 'nullable', 'integer', 'between:1,31'],
+            'invoice_closing_day' => ['sometimes', 'nullable', 'integer', 'between:1,31'],
             'color' => ['sometimes', 'nullable', 'string', 'max:20'],
             'is_active' => ['sometimes', 'boolean'],
         ];

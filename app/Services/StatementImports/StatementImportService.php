@@ -4,6 +4,7 @@ namespace App\Services\StatementImports;
 
 use App\Data\StatementImports\CreateStatementImportData;
 use App\Data\StatementImports\ParsedStatementTransaction;
+use App\Enum\AccountType;
 use App\Enum\StatementImportFormat;
 use App\Enum\TransactionEntryType;
 use App\Enum\TransactionOrigin;
@@ -14,6 +15,7 @@ use App\Models\Account;
 use App\Models\StatementImport;
 use App\Repositories\StatementImportRepository;
 use App\Repositories\TransactionRepository;
+use App\Services\TransactionGroupService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -40,6 +42,7 @@ final class StatementImportService
         private readonly CsvStatementParser $csvParser,
         private readonly StatementImportRepository $repository,
         private readonly TransactionRepository $transactionRepository,
+        private readonly TransactionGroupService $transactionGroupService,
     ) {}
 
     /** @return Collection<int, StatementImport> */
@@ -102,11 +105,19 @@ final class StatementImportService
     {
         try {
             DB::transaction(function () use ($account, $parsed): void {
+                $transactionGroupId = null;
+
+                if ($account->type === AccountType::CREDIT_CARD && $account->invoice_due_day !== null) {
+                    $transactionGroupId = $this->transactionGroupService
+                        ->resolveOrCreateForCreditCardPurchase($account, $parsed->date)?->id;
+                }
+
                 $this->transactionRepository->createFromExternal([
                     'user_id' => $account->user_id,
                     'account_id' => $account->id,
                     'category_id' => null,
                     'recurrence_id' => null,
+                    'transaction_group_id' => $transactionGroupId,
                     'external_id' => $parsed->externalId,
                     'origin' => TransactionOrigin::STATEMENT_IMPORT,
                     'type' => $parsed->type,

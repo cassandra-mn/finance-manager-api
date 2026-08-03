@@ -12,6 +12,8 @@ final readonly class UpdateAccountData
         public ?AccountType $type,
         public ?int $initialBalanceCents,
         public ?int $creditLimitCents,
+        public ?int $invoiceDueDay,
+        public ?int $invoiceClosingDay,
         public ?string $color,
         public ?bool $isActive,
     ) {}
@@ -23,6 +25,8 @@ final readonly class UpdateAccountData
             type: $request->filled('type') ? AccountType::from($request->string('type')->toString()) : null,
             initialBalanceCents: $request->filled('initial_balance_cents') ? (int) $request->integer('initial_balance_cents') : null,
             creditLimitCents: $request->filled('credit_limit_cents') ? $request->integer('credit_limit_cents') : null,
+            invoiceDueDay: $request->filled('invoice_due_day') ? (int) $request->integer('invoice_due_day') : null,
+            invoiceClosingDay: $request->filled('invoice_closing_day') ? (int) $request->integer('invoice_closing_day') : null,
             color: $request->filled('color') ? $request->string('color')->toString() : null,
             isActive: $request->has('is_active') ? $request->boolean('is_active') : null,
         );

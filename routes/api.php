@@ -9,6 +9,7 @@ use App\Http\Controllers\Api\V1\InsightsController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\StatementImportController;
 use App\Http\Controllers\Api\V1\TransactionController;
+use App\Http\Controllers\Api\V1\TransactionGroupController;
 use App\Http\Controllers\Api\V1\WhatsApp\WhatsAppLinkController;
 use App\Http\Controllers\Api\V1\WhatsApp\WhatsAppWebhookController;
 use Illuminate\Support\Facades\Route;
@@ -48,6 +49,12 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
         Route::post('transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
+
+        Route::apiResource('transaction-groups', TransactionGroupController::class)
+            ->parameters(['transaction-groups' => 'transactionGroup'])
+            ->only(['index', 'show', 'update']);
+        Route::post('transaction-groups/{transactionGroup}/pay', [TransactionGroupController::class, 'pay'])->name('transaction-groups.pay');
+        Route::post('transaction-groups/{transactionGroup}/close', [TransactionGroupController::class, 'close'])->name('transaction-groups.close');
 
         Route::post('recurrences/{recurrence}/pause', [RecurrenceController::class, 'pause'])->name('recurrences.pause');
         Route::post('recurrences/{recurrence}/resume', [RecurrenceController::class, 'resume'])->name('recurrences.resume');
