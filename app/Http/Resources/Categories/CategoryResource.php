@@ -9,8 +9,18 @@ use Illuminate\Http\Resources\Json\JsonResource;
 /** @mixin Category */
 class CategoryResource extends JsonResource
 {
-    public function toArray(Request $request): array
+    public function toArray(Request $request): ?array
     {
+        // The underlying category can be null here even though the resource
+        // was instantiated directly (not via whenLoaded()) — e.g. a budget
+        // or recurrence whose category was soft-deleted. Category uses
+        // SoftDeletes, so the FK row still exists but Eloquent's default
+        // scope makes the relation resolve to null; without this guard,
+        // every property access below throws.
+        if ($this->resource === null) {
+            return null;
+        }
+
         return [
             'id' => $this->id,
             'name' => $this->name,

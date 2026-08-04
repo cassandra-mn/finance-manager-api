@@ -390,4 +390,22 @@ class BudgetTest extends TestCase
             ->assertJsonPath('reference_period.to', '2026-08-31')
             ->assertJsonCount(1, 'data');
     }
+
+    public function test_status_does_not_crash_when_the_budgets_category_was_soft_deleted(): void
+    {
+        $user = User::factory()->create();
+        $category = Category::factory()->for($user)->expense()->create();
+        Budget::factory()->for($user)->for($category)->forPeriod(8, 2026)->create(['amount_cents' => 100000]);
+
+        // Deleting a category does not currently block deletion when it
+        // still has budgets attached (soft delete), which leaves this
+        // budget's category relation resolving to null.
+        $category->delete();
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/budgets/status?reference_date=2026-08-15');
+
+        $response->assertOk()->assertJsonPath('data.0.category', null);
+    }
 }
