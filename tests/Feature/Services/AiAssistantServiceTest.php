@@ -209,6 +209,41 @@ class AiAssistantServiceTest extends TestCase
         $this->assertSame('a1', $result['actions'][1]['account_ref']);
     }
 
+    public function test_amount_without_decimal_places_is_discarded_instead_of_inflated_100x(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $account = Account::factory()->for($user)->create(['type' => AccountType::CREDIT_CARD]);
+
+        $this->fakeGemini([
+            'clarification' => null,
+            'actions' => [
+                [
+                    'client_id' => 'a1',
+                    'kind' => 'create_transaction',
+                    'summary' => 'Despesa de R$ 140,00',
+                    'transaction' => [
+                        'account_id' => $account->id,
+                        'account_ref' => null,
+                        'category_id' => null,
+                        'type' => 'expense',
+                        'entry_type' => 'single',
+                        'description' => 'Conta',
+                        'amount' => '14000',
+                        'due_date' => '2026-08-05',
+                        'notes' => null,
+                    ],
+                ],
+            ],
+        ]);
+
+        $result = app(AiAssistantService::class)->quickAdd('adicionei uma conta no valor de 140 reais', $user);
+
+        $this->assertSame([], $result['actions']);
+        $this->assertNotNull($result['clarification']);
+    }
+
     public function test_unexpected_finish_reason_becomes_a_clarification_instead_of_an_error(): void
     {
         $user = User::factory()->create();

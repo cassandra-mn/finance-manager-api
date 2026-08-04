@@ -92,9 +92,9 @@ final class AiAssistantService
         $payload = [
             'name' => (string) ($raw['name'] ?? ''),
             'type' => (string) ($raw['type'] ?? ''),
-            'initial_balance_cents' => Money::fromAmount($raw['initial_balance'] ?? '0.00')->cents,
+            'initial_balance_cents' => $this->parseAiMoneyCents($raw['initial_balance'] ?? '0.00', 'initial_balance'),
             'credit_limit_cents' => isset($raw['credit_limit'])
-                ? Money::fromAmount($raw['credit_limit'])->cents
+                ? $this->parseAiMoneyCents($raw['credit_limit'], 'credit_limit')
                 : null,
             'color' => $raw['color'] ?? null,
         ];
@@ -108,6 +108,30 @@ final class AiAssistantService
             'account_ref' => null,
             'payload' => $payload,
         ];
+    }
+
+    /**
+     * Converte um valor monetário devolvido pela IA para centavos, exigindo o
+     * formato decimal em reais com exatamente 2 casas (ex.: "140.00") pedido no
+     * prompt (ver buildSystemInstruction). Um valor sem separador decimal (ex.:
+     * "14000") é ambíguo — pode ser reais arredondados ou, por engano do
+     * modelo, centavos já convertidos — e Money::fromAmount o multiplicaria por
+     * 100 de qualquer forma, inflando o valor real em 100x. Rejeitar aqui faz a
+     * ação ser descartada com segurança em vez de lançar um valor errado.
+     */
+    private function parseAiMoneyCents(mixed $raw, string $field): int
+    {
+        if (! is_string($raw) && ! is_float($raw) && ! is_int($raw)) {
+            throw new InvalidArgumentException("valor monetário ausente ou inválido para \"{$field}\".");
+        }
+
+        $normalized = is_string($raw) ? str_replace(',', '.', trim($raw)) : (string) $raw;
+
+        if (! preg_match('/^\d+\.\d{2}$/', $normalized)) {
+            throw new InvalidArgumentException("formato de valor monetário inesperado para \"{$field}\": \"{$raw}\" (esperado decimal em reais, ex.: \"140.00\").");
+        }
+
+        return Money::fromAmount($normalized)->cents;
     }
 
     /** @return array<string, mixed> */
@@ -142,7 +166,7 @@ final class AiAssistantService
             'type' => (string) ($raw['type'] ?? ''),
             'entry_type' => (string) ($raw['entry_type'] ?? 'single'),
             'description' => (string) ($raw['description'] ?? ''),
-            'amount_cents' => Money::fromAmount($raw['amount'])->cents,
+            'amount_cents' => $this->parseAiMoneyCents($raw['amount'], 'amount'),
             'due_date' => (string) ($raw['due_date'] ?? ''),
             'notes' => $raw['notes'] ?? null,
         ];
@@ -192,7 +216,7 @@ final class AiAssistantService
             throw new InvalidArgumentException('número de parcelas inválido.');
         }
 
-        $totalCents = Money::fromAmount($raw['total_amount'])->cents;
+        $totalCents = $this->parseAiMoneyCents($raw['total_amount'], 'total_amount');
         $base = intdiv($totalCents, $count);
         $remainder = $totalCents - ($base * $count);
         $firstDueDate = Carbon::parse((string) $raw['first_due_date']);
@@ -243,7 +267,7 @@ final class AiAssistantService
             - Use APENAS os ids de conta/categoria fornecidos na lista abaixo. Nunca invente um id.
             - Se o usuário mencionar uma conta ou cartão que não está na lista, só proponha criá-lo (kind: create_account) se estiver claro que é isso que o usuário quer; caso contrário, deixe uma pergunta em "clarification".
             - Toda ação create_transaction/create_installment_transactions PRECISA ter account_id (de uma conta da lista) ou account_ref (de uma ação create_account desta mesma resposta) preenchido. Se não estiver claro em qual conta lançar (por exemplo, o usuário não citou nenhum nome de conta/cartão e há mais de uma conta cadastrada), NÃO proponha a ação: em vez disso, pergunte em "clarification" qual conta usar.
-            - Valores monetários devem ser strings decimais em reais (ex.: "300.00"), nunca centavos.
+            - Valores monetários devem ser strings decimais em reais, SEMPRE com exatamente 2 casas decimais (ex.: "300.00", "140.00"), nunca centavos e nunca sem separador decimal (ex.: "300" ou "14000" são inválidos).
             - Datas devem estar no formato YYYY-MM-DD.
             - "category_id" é opcional: deixe null se não tiver certeza da categoria, não force uma categoria errada.
             - Para compras parceladas (ex.: "3x"), use a ação create_installment_transactions com o valor TOTAL da compra, não o valor de cada parcela.
