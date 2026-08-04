@@ -145,7 +145,9 @@ final class InsightsService
     {
         return [
             'id' => $entry['budget']->id,
-            'category' => (new CategoryResource($entry['budget']->category))->resolve(),
+            'category' => $entry['budget']->category
+                ? (new CategoryResource($entry['budget']->category))->resolve()
+                : null,
             'amount_cents' => $entry['budget']->amount_cents,
             'spent_cents' => $entry['spent_cents'],
             'remaining_cents' => $entry['remaining_cents'],

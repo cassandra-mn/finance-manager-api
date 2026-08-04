@@ -87,6 +87,22 @@ class BudgetProjectionTest extends TestCase
         $response->assertOk()->assertJsonPath('data', []);
     }
 
+    public function test_does_not_crash_when_the_budgets_category_was_soft_deleted(): void
+    {
+        [$user, $budget] = $this->seedBudget(8, 2026, amountCents: 80000, spentCents: 40000);
+
+        // Deleting a category does not currently block deletion when it
+        // still has budgets attached (soft delete), which leaves this
+        // budget's category relation resolving to null.
+        $budget->category->delete();
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/insights/budget-projection');
+
+        $response->assertOk()->assertJsonPath('data.0.category', null);
+    }
+
     /** @return array{0: User, 1: Budget} */
     private function seedBudget(int $month, int $year, int $amountCents, int $spentCents, ?User $forUser = null): array
     {

@@ -58,4 +58,31 @@ class TransactionTest extends TestCase
 
         $response->assertUnprocessable()->assertJsonValidationErrors(['account_id']);
     }
+
+    public function test_listing_transactions_does_not_crash_when_the_account_was_soft_deleted(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->for($user)->expense()->create();
+
+        $transaction = \App\Models\Transaction::factory()->create([
+            'user_id' => $user->id,
+            'account_id' => $account->id,
+            'category_id' => $category->id,
+            'type' => TransactionType::EXPENSE->value,
+        ]);
+
+        // Deleting an account does not currently block deletion when it still
+        // has transactions attached (soft delete), which leaves this
+        // transaction's account relation resolving to null.
+        $account->delete();
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/transactions');
+
+        $response->assertOk()
+            ->assertJsonPath('data.0.id', $transaction->id)
+            ->assertJsonPath('data.0.account', null);
+    }
 }
