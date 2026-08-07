@@ -69,6 +69,13 @@ final class TransactionRepository
         $transaction->delete();
     }
 
+    public function deleteForGroup(int $transactionGroupId): void
+    {
+        Transaction::query()
+            ->where('transaction_group_id', $transactionGroupId)
+            ->delete();
+    }
+
     public function existsForRecurrenceOnDate(int $recurrenceId, Carbon $dueDate): bool
     {
         return Transaction::query()

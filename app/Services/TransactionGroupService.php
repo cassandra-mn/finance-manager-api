@@ -32,7 +32,7 @@ use Throwable;
  * Faturas de cartão de crédito são criadas/reaproveitadas automaticamente
  * (ver resolveOrCreateForCreditCardPurchase, chamado por TransactionService
  * e StatementImportService), nunca via endpoint de criação — por isso não há
- * `create()`/`delete()` públicos aqui nesta etapa.
+ * `create()` público aqui nesta etapa.
  */
 final class TransactionGroupService
 {
@@ -115,6 +115,32 @@ final class TransactionGroupService
             ]);
 
             throw new ServiceException('Não foi possível atualizar a fatura.', previous: $e);
+        }
+    }
+
+    /**
+     * Exclui a fatura e todas as transações lançadas nela (soft delete).
+     */
+    public function delete(TransactionGroup $group): void
+    {
+        if ($group->isPaid()) {
+            throw ValidationException::withMessages([
+                'status' => ['Não é possível excluir uma fatura já paga.'],
+            ]);
+        }
+
+        try {
+            DB::transaction(function () use ($group): void {
+                $this->transactionRepository->deleteForGroup($group->id);
+                $this->repository->delete($group);
+            });
+        } catch (Throwable $e) {
+            Log::error('finance.transaction_groups.delete_failed', [
+                'transaction_group_id' => $group->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw new ServiceException('Não foi possível excluir a fatura.', previous: $e);
         }
     }
 
