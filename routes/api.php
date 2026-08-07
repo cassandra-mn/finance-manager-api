@@ -70,6 +70,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {
             Route::post('assistant/quick-add', [AssistantController::class, 'quickAdd'])->name('assistant.quick-add');
+            Route::post('assistant/ask', [AssistantController::class, 'askQuestion'])->name('assistant.ask');
         });
     });
 });

@@ -3,14 +3,22 @@
 namespace App\Services;
 
 use App\Common\Money;
+use App\Data\TransactionGroups\TransactionGroupFiltersData;
+use App\Enum\AccountType;
+use App\Enum\TransactionGroupStatus;
+use App\Enum\TransactionStatus;
 use App\Exceptions\ServiceException;
 use App\Http\Requests\Accounts\StoreAccountRequest;
 use App\Http\Requests\Transactions\StoreTransactionRequest;
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\Transaction;
+use App\Models\TransactionGroup;
 use App\Models\User;
 use App\Repositories\AccountRepository;
 use App\Repositories\CategoryRepository;
+use App\Repositories\TransactionGroupRepository;
+use App\Repositories\TransactionRepository;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
@@ -23,6 +31,9 @@ final class AiAssistantService
     public function __construct(
         private readonly AccountRepository $accountRepository,
         private readonly CategoryRepository $categoryRepository,
+        private readonly TransactionRepository $transactionRepository,
+        private readonly TransactionGroupRepository $transactionGroupRepository,
+        private readonly AccountBalanceService $accountBalanceService,
         private readonly GeminiClient $geminiClient,
     ) {}
 
@@ -80,6 +91,143 @@ final class AiAssistantService
         }
 
         return ['clarification' => $clarification, 'actions' => $actions];
+    }
+
+    /**
+     * Responde perguntas em português sobre a situação financeira do usuário
+     * (ex.: "quanto gastei com moradia?", "qual minha maior conta a pagar?").
+     * Diferente de quickAdd(), não propõe ações — só monta um resumo dos
+     * dados do usuário como contexto e pede pra IA responder com base
+     * SOMENTE nesses números, para evitar respostas inventadas.
+     *
+     * @return array{answer: string}
+     */
+    public function askQuestion(string $message, User $user): array
+    {
+        $from = now()->startOfMonth();
+        $to = now()->endOfMonth();
+
+        $accounts = $this->accountRepository->listForUser($user->id);
+        $categoryTotals = $this->transactionRepository->sumExpensesByCategory($user->id, $from, $to);
+
+        $largestPendingTransaction = Transaction::query()
+            ->forUser($user->id)
+            ->where('status', TransactionStatus::PENDING->value)
+            ->whereNull('transaction_group_id')
+            ->orderByDesc('amount_cents')
+            ->first();
+
+        $largestClosedInvoice = $this->transactionGroupRepository
+            ->listForUser($user->id, new TransactionGroupFiltersData(status: TransactionGroupStatus::CLOSED))
+            ->sortByDesc(fn (TransactionGroup $group): int => $group->total_cents)
+            ->first();
+
+        try {
+            $raw = $this->geminiClient->generateStructured(
+                $this->buildAskSystemInstruction(),
+                $this->buildAskUserMessage(
+                    $message,
+                    $accounts,
+                    $categoryTotals,
+                    $largestPendingTransaction,
+                    $largestClosedInvoice,
+                    $from,
+                    $to,
+                ),
+                $this->askResponseSchema(),
+            );
+        } catch (ServiceException $e) {
+            return ['answer' => $e->getMessage()];
+        }
+
+        $answer = is_string($raw['answer'] ?? null) && trim($raw['answer']) !== ''
+            ? trim($raw['answer'])
+            : 'Não consegui responder a essa pergunta agora, pode reformular?';
+
+        return ['answer' => $answer];
+    }
+
+    private function buildAskSystemInstruction(): string
+    {
+        $today = now()->translatedFormat('l, d/m/Y');
+
+        return <<<TEXT
+            Você é um assistente financeiro que responde perguntas em português sobre a situação financeira do usuário de um app de finanças pessoais, com base SOMENTE nos dados fornecidos no contexto abaixo.
+
+            Hoje é {$today}.
+
+            Regras importantes:
+            - Responda de forma curta e direta, em português — 1 a 3 frases, sem rodeios nem saudações.
+            - Use SOMENTE os números, contas e categorias listados no contexto. NUNCA invente ou estime um valor que não esteja explícito ali.
+            - Se a pergunta não puder ser respondida com os dados fornecidos (ex.: pede algo fora do período coberto, ou uma categoria/conta que não existe), diga isso claramente em vez de adivinhar.
+            - Ao citar valores monetários, use o formato "R$ 1.234,56" (já vêm formatados assim no contexto — apenas repita).
+            TEXT;
+    }
+
+    /**
+     * @param  Collection<int, Account>  $accounts
+     * @param  Collection<int, object{category_id:int, category_name:string, category_color:?string, total_cents:int}>  $categoryTotals
+     */
+    private function buildAskUserMessage(
+        string $message,
+        Collection $accounts,
+        Collection $categoryTotals,
+        ?Transaction $largestPendingTransaction,
+        ?TransactionGroup $largestClosedInvoice,
+        Carbon $from,
+        Carbon $to,
+    ): string {
+        $accountLines = $accounts->isEmpty()
+            ? 'Nenhuma conta cadastrada.'
+            : $accounts->map(function (Account $account): string {
+                $balance = $this->accountBalanceService->calculateCurrentBalance($account);
+                $isCard = $account->type === AccountType::CREDIT_CARD;
+                $label = $isCard ? 'fatura em aberto' : 'saldo';
+                $limitSuffix = $isCard && $account->credit_limit_cents
+                    ? ', limite '.Money::fromCents($account->credit_limit_cents)->format()
+                    : '';
+
+                return "- {$account->name} ({$account->type->label()}): {$label} ".$balance->format().$limitSuffix;
+            })->implode("\n");
+
+        $categoryLines = $categoryTotals->isEmpty()
+            ? 'Nenhuma despesa registrada neste período.'
+            : $categoryTotals->map(
+                fn (object $row): string => "- {$row->category_name}: ".Money::fromCents($row->total_cents)->format()
+            )->implode("\n");
+
+        $largestPendingLine = $largestPendingTransaction
+            ? "\"{$largestPendingTransaction->description}\", vencimento {$largestPendingTransaction->due_date->toDateString()}, valor ".Money::fromCents($largestPendingTransaction->amount_cents)->format()
+            : 'Nenhuma despesa avulsa pendente.';
+
+        $largestInvoiceLine = $largestClosedInvoice
+            ? "\"{$largestClosedInvoice->name}\", vencimento {$largestClosedInvoice->due_date->toDateString()}, valor ".Money::fromCents($largestClosedInvoice->total_cents)->format()
+            : 'Nenhuma fatura de cartão fechada aguardando pagamento.';
+
+        return <<<TEXT
+            Contas do usuário e seus saldos atuais:
+            {$accountLines}
+
+            Gastos por categoria neste mês ({$from->toDateString()} a {$to->toDateString()}), do maior para o menor:
+            {$categoryLines}
+
+            Maior despesa avulsa pendente (não é fatura de cartão): {$largestPendingLine}
+            Maior fatura de cartão de crédito já fechada aguardando pagamento: {$largestInvoiceLine}
+
+            Pergunta do usuário: "{$message}"
+            TEXT;
+    }
+
+    /** @return array<string, mixed> */
+    private function askResponseSchema(): array
+    {
+        return [
+            'type' => 'OBJECT',
+            'properties' => [
+                'answer' => ['type' => 'STRING'],
+            ],
+            'required' => ['answer'],
+        ];
     }
 
     /** @return array<string, mixed> */
