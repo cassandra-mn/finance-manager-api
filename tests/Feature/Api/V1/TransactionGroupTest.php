@@ -188,6 +188,81 @@ class TransactionGroupTest extends TestCase
         $this->assertNotNull($group->payment_transaction_id);
     }
 
+    public function test_paying_an_invoice_with_an_amount_lower_than_the_total_registers_a_partial_payment(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10', 10000);
+        $this->createTransaction($user, $account, '2026-07-15', 20000);
+        $group = TransactionGroup::query()->firstOrFail();
+
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+
+        $response = $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", [
+            'payment_account_id' => $checking->id,
+            'paid_at' => '2026-08-05',
+            'amount_cents' => 12000,
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('status', 'partially_paid')
+            ->assertJsonPath('total_cents', 30000)
+            ->assertJsonPath('paid_amount_cents', 12000);
+
+        // A transação de liquidação debita só o valor efetivamente pago —
+        // os 18000 restantes não viram uma nova pendência no app.
+        $this->assertDatabaseHas('transactions', [
+            'account_id' => $checking->id,
+            'amount_cents' => 12000,
+            'status' => 'paid',
+            'transaction_group_id' => null,
+        ]);
+
+        $group->refresh();
+        $this->assertTrue($group->isPartiallyPaid());
+        $this->assertSame(12000, $group->paid_amount_cents);
+    }
+
+    public function test_cannot_pay_an_already_partially_paid_invoice_again(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10', 10000);
+        $group = TransactionGroup::query()->firstOrFail();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", [
+            'payment_account_id' => $checking->id,
+            'amount_cents' => 5000,
+        ])->assertOk();
+
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", ['payment_account_id' => $checking->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+    }
+
+    public function test_cannot_pay_an_invoice_with_more_than_its_total_amount(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10', 10000);
+        $group = TransactionGroup::query()->firstOrFail();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", [
+            'payment_account_id' => $checking->id,
+            'amount_cents' => 10001,
+        ])->assertUnprocessable()->assertJsonValidationErrors(['amount_cents']);
+    }
+
     public function test_cannot_pay_an_invoice_twice(): void
     {
         $user = User::factory()->create();
@@ -266,6 +341,28 @@ class TransactionGroupTest extends TestCase
         $this->assertDatabaseHas('transaction_groups', ['id' => $group->id, 'deleted_at' => null]);
     }
 
+    public function test_cannot_delete_a_partially_paid_invoice(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10');
+        $group = TransactionGroup::query()->firstOrFail();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", [
+            'payment_account_id' => $checking->id,
+            'amount_cents' => 5000,
+        ])->assertOk();
+
+        $this->deleteJson("/api/v1/transaction-groups/{$group->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertDatabaseHas('transaction_groups', ['id' => $group->id, 'deleted_at' => null]);
+    }
+
     public function test_user_cannot_delete_another_users_invoice(): void
     {
         $userA = User::factory()->create();
@@ -278,6 +375,32 @@ class TransactionGroupTest extends TestCase
 
         Sanctum::actingAs($userA);
         $this->deleteJson("/api/v1/transaction-groups/{$group->id}")->assertNotFound();
+    }
+
+    public function test_cannot_edit_or_delete_a_transaction_from_a_partially_paid_invoice(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10', 10000);
+        $transaction = $account->transactions()->firstOrFail();
+        $group = TransactionGroup::query()->firstOrFail();
+
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", [
+            'payment_account_id' => $checking->id,
+            'amount_cents' => 5000,
+        ])->assertOk();
+
+        $this->patchJson("/api/v1/transactions/{$transaction->id}", ['amount_cents' => 999])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['transaction_group_id']);
+
+        $this->deleteJson("/api/v1/transactions/{$transaction->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['transaction_group_id']);
     }
 
     public function test_user_can_list_and_show_their_invoices(): void

@@ -115,7 +115,14 @@ final class TransactionService
         }
     }
 
-    public function markAsPaid(Transaction $transaction): Transaction
+    /**
+     * Marca a transação como paga. Um $paidAmountCents menor que o valor da
+     * transação registra um pagamento parcial (status PARTIALLY_PAID) — o
+     * restante não vira uma nova pendência no app (normalmente é resolvido
+     * fora dele, ex.: parcelado no banco), só fica registrado para fins de
+     * estatística (ver PartialPaymentsService).
+     */
+    public function markAsPaid(Transaction $transaction, ?int $paidAmountCents = null): Transaction
     {
         if ($transaction->isGrouped()) {
             throw ValidationException::withMessages([
@@ -129,9 +136,18 @@ final class TransactionService
             ]);
         }
 
+        if ($paidAmountCents !== null && $paidAmountCents > $transaction->amount_cents) {
+            throw ValidationException::withMessages([
+                'amount_cents' => ['O valor pago não pode ser maior que o valor da transação.'],
+            ]);
+        }
+
+        $isPartial = $paidAmountCents !== null && $paidAmountCents < $transaction->amount_cents;
+
         try {
             return $this->repository->update($transaction, [
-                'status' => TransactionStatus::PAID,
+                'status' => $isPartial ? TransactionStatus::PARTIALLY_PAID : TransactionStatus::PAID,
+                'paid_amount_cents' => $isPartial ? $paidAmountCents : $transaction->amount_cents,
                 'paid_at' => Carbon::now(),
             ]);
         } catch (Throwable $e) {
@@ -174,7 +190,7 @@ final class TransactionService
 
     private function guardAgainstPaidGroup(Transaction $transaction): void
     {
-        if ($transaction->isGrouped() && $transaction->group?->isPaid()) {
+        if ($transaction->isGrouped() && ($transaction->group?->isPaid() || $transaction->group?->isPartiallyPaid())) {
             throw ValidationException::withMessages([
                 'transaction_group_id' => ['Não é possível alterar uma transação de uma fatura já paga.'],
             ]);

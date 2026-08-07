@@ -3,9 +3,11 @@
 namespace App\Services\Insights;
 
 use App\Data\Insights\AnomalyDetectionFiltersData;
+use App\Data\Insights\PartialPaymentsFiltersData;
 use App\Data\Insights\SpendingSummaryFiltersData;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
+use App\Http\Requests\Insights\PartialPaymentsRequest;
 use App\Http\Requests\Insights\SpendingSummaryRequest;
 use App\Http\Resources\Categories\CategoryResource;
 use App\Repositories\BudgetRepository;
@@ -25,6 +27,7 @@ final class InsightsService
         private readonly SpendingSummaryService $spendingSummaryService,
         private readonly AnomalyDetectionService $anomalyDetectionService,
         private readonly BudgetStatusService $budgetStatusService,
+        private readonly PartialPaymentsService $partialPaymentsService,
         private readonly BudgetRepository $budgetRepository,
     ) {}
 
@@ -92,6 +95,30 @@ final class InsightsService
                 'threshold_percentage' => $filters->thresholdPercentage,
                 'anomalies_count' => count(array_filter($data, fn (array $entry): bool => $entry['is_anomalous'])),
                 'new_categories_count' => count(array_filter($data, fn (array $entry): bool => $entry['is_new_category'])),
+            ],
+        ];
+    }
+
+    public function partialPayments(PartialPaymentsRequest $request): array
+    {
+        $filters = PartialPaymentsFiltersData::fromRequest($request);
+
+        $data = $this->partialPaymentsService->summarize(
+            $request->user()->id,
+            $filters->referenceDate,
+            $filters->lookbackMonths,
+        );
+
+        return [
+            'reference_period' => [
+                'lookback_months' => $filters->lookbackMonths,
+                'from' => $data[0]['month'] ?? null,
+                'to' => $data[count($data) - 1]['month'] ?? null,
+            ],
+            'data' => $data,
+            'summary' => [
+                'total_shortfall_cents' => array_sum(array_column($data, 'shortfall_cents')),
+                'total_count' => array_sum(array_column($data, 'count')),
             ],
         ];
     }

@@ -1,11 +1,10 @@
 <?php
 
-namespace App\Http\Requests\TransactionGroups;
+namespace App\Http\Requests\Transactions;
 
-use App\Rules\ExistsForUser;
 use Illuminate\Foundation\Http\FormRequest;
 
-class PayTransactionGroupRequest extends FormRequest
+class PayTransactionRequest extends FormRequest
 {
     public function authorize(): bool
     {
@@ -15,8 +14,6 @@ class PayTransactionGroupRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'payment_account_id' => ['required', 'integer', new ExistsForUser('accounts')],
-            'paid_at' => ['sometimes', 'date'],
             'amount_cents' => ['sometimes', 'nullable', 'integer', 'min:1'],
         ];
     }

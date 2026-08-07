@@ -59,4 +59,22 @@ final class TransactionGroupRepository
             ->closingBy($date)
             ->chunkById($chunkSize, $callback);
     }
+
+    /**
+     * Faturas pagas parcialmente num intervalo de data de pagamento, com as
+     * transações carregadas (necessário pra somar o valor de face da fatura,
+     * que não é persistido — ver totalCents() no model). Usado por
+     * PartialPaymentsService.
+     *
+     * @return Collection<int, TransactionGroup>
+     */
+    public function listPartiallyPaidBetween(int $userId, Carbon $from, Carbon $to): Collection
+    {
+        return TransactionGroup::query()
+            ->forUser($userId)
+            ->partiallyPaid()
+            ->whereBetween('paid_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->with('transactions')
+            ->get();
+    }
 }

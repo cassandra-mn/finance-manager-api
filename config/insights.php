@@ -20,4 +20,13 @@ return [
          */
         'threshold_percentage' => (int) env('INSIGHTS_ANOMALY_THRESHOLD_PERCENTAGE', 40),
     ],
+
+    'partial_payments' => [
+        /*
+         * Quantos meses (incluindo o atual) entram no histórico de valores
+         * deixados pendentes por pagamentos parciais, quando não informado
+         * na requisição.
+         */
+        'lookback_months' => (int) env('INSIGHTS_PARTIAL_PAYMENTS_LOOKBACK_MONTHS', 6),
+    ],
 ];

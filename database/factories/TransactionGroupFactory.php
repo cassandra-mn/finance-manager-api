@@ -47,4 +47,13 @@ class TransactionGroupFactory extends Factory
             'paid_at' => Carbon::now(),
         ]);
     }
+
+    public function partiallyPaid(int $paidAmountCents): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => TransactionGroupStatus::PARTIALLY_PAID,
+            'paid_amount_cents' => $paidAmountCents,
+            'paid_at' => Carbon::now(),
+        ]);
+    }
 }
