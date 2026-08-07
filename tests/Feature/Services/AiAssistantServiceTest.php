@@ -5,6 +5,7 @@ namespace Tests\Feature\Services;
 use App\Enum\AccountType;
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\Transaction;
 use App\Models\User;
 use App\Services\AiAssistantService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -270,5 +271,64 @@ class AiAssistantServiceTest extends TestCase
 
         $this->assertSame([], $result['actions']);
         $this->assertNotNull($result['clarification']);
+    }
+
+    public function test_ask_question_returns_geminis_answer_and_sends_a_financial_summary_as_context(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $account = Account::factory()->for($user)->create(['type' => AccountType::CHECKING, 'name' => 'Itaú', 'initial_balance_cents' => 100000]);
+        $category = Category::factory()->for($user)->expense()->create(['name' => 'Moradia']);
+
+        Transaction::factory()
+            ->for($user)
+            ->for($account)
+            ->for($category)
+            ->paid()
+            ->create(['type' => 'expense', 'amount_cents' => 240000, 'due_date' => now()]);
+
+        $this->fakeGemini(['answer' => 'Você gastou R$ 2.400,00 com Moradia este mês.']);
+
+        $result = app(AiAssistantService::class)->askQuestion('quanto gastei com moradia?', $user);
+
+        $this->assertSame('Você gastou R$ 2.400,00 com Moradia este mês.', $result['answer']);
+
+        Http::assertSent(function ($request) {
+            $text = $request->data()['contents'][0]['parts'][0]['text'] ?? '';
+
+            return str_contains($text, 'Moradia')
+                && str_contains($text, 'R$ 2.400,00')
+                && str_contains($text, 'Itaú')
+                && str_contains($text, 'quanto gastei com moradia?');
+        });
+    }
+
+    public function test_ask_question_falls_back_to_a_friendly_message_when_gemini_returns_no_answer(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        $this->fakeGemini(['answer' => '']);
+
+        $result = app(AiAssistantService::class)->askQuestion('qualquer coisa', $user);
+
+        $this->assertNotSame('', $result['answer']);
+        $this->assertIsString($result['answer']);
+    }
+
+    public function test_ask_question_network_error_becomes_a_friendly_answer_instead_of_a_500(): void
+    {
+        $user = User::factory()->create();
+        Sanctum::actingAs($user);
+
+        Http::fake(function (): void {
+            throw new RuntimeException('connection timed out');
+        });
+
+        $result = app(AiAssistantService::class)->askQuestion('qualquer coisa', $user);
+
+        $this->assertIsString($result['answer']);
+        $this->assertNotSame('', $result['answer']);
     }
 }
