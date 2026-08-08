@@ -38,7 +38,13 @@ class RegisterTest extends TestCase
 
         $user = User::where('email', 'ana@example.com')->firstOrFail();
 
-        $this->assertGreaterThan(0, Category::withoutGlobalScopes()->where('user_id', $user->id)->count());
+        $categories = Category::withoutGlobalScopes()->where('user_id', $user->id)->get();
+
+        $this->assertGreaterThan(0, $categories->count());
+        foreach ($categories as $category) {
+            $this->assertNotNull($category->color, "Categoria '{$category->name}' sem cor padrão.");
+            $this->assertNotNull($category->icon, "Categoria '{$category->name}' sem ícone padrão.");
+        }
     }
 
     public function test_email_must_be_unique(): void

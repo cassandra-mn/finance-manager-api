@@ -52,7 +52,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::apiResource('transaction-groups', TransactionGroupController::class)
             ->parameters(['transaction-groups' => 'transactionGroup'])
-            ->only(['index', 'show', 'update', 'destroy']);
+            ->only(['index', 'store', 'show', 'update', 'destroy']);
         Route::post('transaction-groups/{transactionGroup}/pay', [TransactionGroupController::class, 'pay'])->name('transaction-groups.pay');
         Route::post('transaction-groups/{transactionGroup}/close', [TransactionGroupController::class, 'close'])->name('transaction-groups.close');
 

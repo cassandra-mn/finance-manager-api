@@ -93,20 +93,20 @@ class DemoSeeder extends Seeder
     private function createCategories(User $user): array
     {
         $income = [
-            'Salário' => ['color' => '#16a34a', 'icon' => 'wallet'],
-            'Freelance' => ['color' => '#0ea5e9', 'icon' => 'briefcase'],
-            'Investimentos' => ['color' => '#22c55e', 'icon' => 'trending-up'],
+            'Salário' => ['color' => '#16a34a', 'icon' => 'Wallet'],
+            'Freelance' => ['color' => '#0ea5e9', 'icon' => 'Briefcase'],
+            'Investimentos' => ['color' => '#22c55e', 'icon' => 'TrendingUp'],
         ];
 
         $expense = [
-            'Moradia' => ['color' => '#b45309', 'icon' => 'home'],
-            'Alimentação' => ['color' => '#ea580c', 'icon' => 'utensils'],
-            'Transporte' => ['color' => '#0891b2', 'icon' => 'car'],
-            'Saúde' => ['color' => '#e11d48', 'icon' => 'heart-pulse'],
-            'Educação' => ['color' => '#7c3aed', 'icon' => 'graduation-cap'],
-            'Lazer' => ['color' => '#db2777', 'icon' => 'popcorn'],
-            'Assinaturas' => ['color' => '#4f46e5', 'icon' => 'repeat'],
-            'Compras' => ['color' => '#65a30d', 'icon' => 'shopping-bag'],
+            'Moradia' => ['color' => '#b45309', 'icon' => 'Home'],
+            'Alimentação' => ['color' => '#ea580c', 'icon' => 'Utensils'],
+            'Transporte' => ['color' => '#0891b2', 'icon' => 'Car'],
+            'Saúde' => ['color' => '#e11d48', 'icon' => 'HeartPulse'],
+            'Educação' => ['color' => '#7c3aed', 'icon' => 'GraduationCap'],
+            'Lazer' => ['color' => '#db2777', 'icon' => 'Gamepad2'],
+            'Assinaturas' => ['color' => '#4f46e5', 'icon' => 'Laptop'],
+            'Compras' => ['color' => '#65a30d', 'icon' => 'ShoppingBag'],
         ];
 
         $categories = [];

@@ -23,17 +23,25 @@ final class CategoryService
      * ele não comece com a tela de categorias vazia.
      */
     private const DEFAULTS = [
-        ['name' => 'Salário', 'type' => TransactionType::INCOME],
-        ['name' => 'Freelance', 'type' => TransactionType::INCOME],
-        ['name' => 'Outras receitas', 'type' => TransactionType::INCOME],
-        ['name' => 'Moradia', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Alimentação', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Transporte', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Saúde', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Educação', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Lazer', 'type' => TransactionType::EXPENSE],
-        ['name' => 'Outras despesas', 'type' => TransactionType::EXPENSE],
+        ['name' => 'Salário', 'type' => TransactionType::INCOME, 'color' => '#10B981', 'icon' => 'Wallet'],
+        ['name' => 'Freelance', 'type' => TransactionType::INCOME, 'color' => '#3B82F6', 'icon' => 'Briefcase'],
+        ['name' => 'Outras receitas', 'type' => TransactionType::INCOME, 'color' => '#14B8A6', 'icon' => 'TrendingUp'],
+        ['name' => 'Moradia', 'type' => TransactionType::EXPENSE, 'color' => '#F97316', 'icon' => 'Home'],
+        ['name' => 'Alimentação', 'type' => TransactionType::EXPENSE, 'color' => '#EF4444', 'icon' => 'Utensils'],
+        ['name' => 'Transporte', 'type' => TransactionType::EXPENSE, 'color' => '#06B6D4', 'icon' => 'Car'],
+        ['name' => 'Saúde', 'type' => TransactionType::EXPENSE, 'color' => '#EC4899', 'icon' => 'HeartPulse'],
+        ['name' => 'Educação', 'type' => TransactionType::EXPENSE, 'color' => '#8B5CF6', 'icon' => 'GraduationCap'],
+        ['name' => 'Lazer', 'type' => TransactionType::EXPENSE, 'color' => '#6366F1', 'icon' => 'Gamepad2'],
+        ['name' => 'Outras despesas', 'type' => TransactionType::EXPENSE, 'color' => '#F59E0B', 'icon' => 'ShoppingBag'],
     ];
+
+    /**
+     * Cor/ícone usados quando uma categoria é criada sem escolher nenhum dos
+     * dois (ex.: integrações futuras) — nunca deixamos uma categoria "em branco".
+     */
+    private const FALLBACK_COLOR = '#64748B';
+
+    private const FALLBACK_ICON = 'Landmark';
 
     public function __construct(
         private readonly CategoryRepository $repository,
@@ -56,8 +64,8 @@ final class CategoryService
                 'user_id' => $data->userId,
                 'name' => $data->name,
                 'type' => $data->type,
-                'color' => $data->color,
-                'icon' => $data->icon,
+                'color' => $data->color ?? self::FALLBACK_COLOR,
+                'icon' => $data->icon ?? self::FALLBACK_ICON,
             ]);
         } catch (Throwable $e) {
             Log::error('finance.categories.create_failed', [
@@ -112,6 +120,8 @@ final class CategoryService
                     'user_id' => $user->id,
                     'name' => $category['name'],
                     'type' => $category['type'],
+                    'color' => $category['color'],
+                    'icon' => $category['icon'],
                 ],
                 self::DEFAULTS,
             ));
