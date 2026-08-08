@@ -228,6 +228,58 @@ class TransactionGroupTest extends TestCase
             ->assertJsonValidationErrors(['transaction_group_id']);
     }
 
+    public function test_user_can_delete_an_open_invoice_and_its_transactions(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10', 10000);
+        $this->createTransaction($user, $account, '2026-07-15', 20000);
+        $group = TransactionGroup::query()->firstOrFail();
+        $transactionIds = $group->transactions()->pluck('id');
+
+        $this->deleteJson("/api/v1/transaction-groups/{$group->id}")->assertNoContent();
+
+        $this->assertSoftDeleted('transaction_groups', ['id' => $group->id]);
+        foreach ($transactionIds as $transactionId) {
+            $this->assertSoftDeleted('transactions', ['id' => $transactionId]);
+        }
+    }
+
+    public function test_cannot_delete_a_paid_invoice(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        $checking = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10');
+        $group = TransactionGroup::query()->firstOrFail();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertOk();
+        $this->postJson("/api/v1/transaction-groups/{$group->id}/pay", ['payment_account_id' => $checking->id])->assertOk();
+
+        $this->deleteJson("/api/v1/transaction-groups/{$group->id}")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+
+        $this->assertDatabaseHas('transaction_groups', ['id' => $group->id, 'deleted_at' => null]);
+    }
+
+    public function test_user_cannot_delete_another_users_invoice(): void
+    {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $accountB = $this->creditCardAccount($userB);
+
+        Sanctum::actingAs($userB);
+        $this->createTransaction($userB, $accountB, '2026-07-10');
+        $group = TransactionGroup::query()->firstOrFail();
+
+        Sanctum::actingAs($userA);
+        $this->deleteJson("/api/v1/transaction-groups/{$group->id}")->assertNotFound();
+    }
+
     public function test_user_can_list_and_show_their_invoices(): void
     {
         $user = User::factory()->create();

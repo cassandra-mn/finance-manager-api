@@ -45,6 +45,11 @@ final class TransactionGroupRepository
         return $group;
     }
 
+    public function delete(TransactionGroup $group): void
+    {
+        $group->delete();
+    }
+
     /**
      * Percorre, em blocos, as faturas abertas cujo fechamento já chegou.
      */

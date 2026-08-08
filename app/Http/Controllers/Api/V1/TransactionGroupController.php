@@ -10,6 +10,7 @@ use App\Http\Resources\TransactionGroups\TransactionGroupResource;
 use App\Models\TransactionGroup;
 use App\Services\TransactionGroupService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Response;
 
 class TransactionGroupController extends Controller
 {
@@ -34,6 +35,13 @@ class TransactionGroupController extends Controller
         $transactionGroup = $this->service->update($transactionGroup, $request);
 
         return (new TransactionGroupResource($transactionGroup->load(['account'])))->response();
+    }
+
+    public function destroy(TransactionGroup $transactionGroup): JsonResponse
+    {
+        $this->service->delete($transactionGroup);
+
+        return response()->json(null, Response::HTTP_NO_CONTENT);
     }
 
     public function pay(PayTransactionGroupRequest $request, TransactionGroup $transactionGroup): JsonResponse
