@@ -25,6 +25,20 @@ class CategoryTest extends TestCase
         $response->assertCreated()->assertJsonPath('name', 'Alimentação');
     }
 
+    public function test_creating_a_category_without_color_or_icon_falls_back_to_defaults(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->postJson('/api/v1/categories', [
+            'name' => 'Alimentação',
+            'type' => TransactionType::EXPENSE->value,
+        ]);
+
+        $response->assertCreated();
+        $this->assertNotNull($response->json('color'));
+        $this->assertNotNull($response->json('icon'));
+    }
+
     public function test_user_only_sees_their_own_categories(): void
     {
         $userA = User::factory()->create();
