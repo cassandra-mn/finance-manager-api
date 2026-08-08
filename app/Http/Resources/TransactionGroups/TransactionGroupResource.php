@@ -26,6 +26,7 @@ class TransactionGroupResource extends JsonResource
             'display_status' => $this->display_status,
             'display_status_label' => $this->display_status->label(),
             'total_cents' => $this->total_cents,
+            'paid_amount_cents' => $this->paid_amount_cents,
             'transactions_count' => $this->whenCounted('transactions'),
             'payment_account' => new AccountResource($this->whenLoaded('paymentAccount')),
             'payment_transaction_id' => $this->payment_transaction_id,

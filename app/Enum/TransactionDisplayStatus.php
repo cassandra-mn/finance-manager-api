@@ -11,6 +11,7 @@ enum TransactionDisplayStatus: string
 {
     case PENDING = 'pending';
     case PAID = 'paid';
+    case PARTIALLY_PAID = 'partially_paid';
     case OVERDUE = 'overdue';
     case CANCELLED = 'cancelled';
 
@@ -19,6 +20,7 @@ enum TransactionDisplayStatus: string
         return match ($this) {
             self::PENDING => 'Pendente',
             self::PAID => 'Pago',
+            self::PARTIALLY_PAID => 'Parcialmente Pago',
             self::OVERDUE => 'Atrasado',
             self::CANCELLED => 'Cancelado',
         };

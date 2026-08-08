@@ -123,7 +123,7 @@ final class TransactionGroupService
      */
     public function delete(TransactionGroup $group): void
     {
-        if ($group->isPaid()) {
+        if ($group->isPaid() || $group->isPartiallyPaid()) {
             throw ValidationException::withMessages([
                 'status' => ['Não é possível excluir uma fatura já paga.'],
             ]);
@@ -164,11 +164,24 @@ final class TransactionGroupService
         }
     }
 
+    /**
+     * Paga a fatura. Um amount_cents menor que o total registra um pagamento
+     * parcial (status PARTIALLY_PAID) — a transação de liquidação criada usa
+     * só o valor efetivamente pago (é isso que debita a conta pagadora), e o
+     * restante não vira uma nova pendência no app, só fica registrado para
+     * fins de estatística (ver PartialPaymentsService).
+     */
     public function pay(TransactionGroup $group, PayTransactionGroupRequest $request): TransactionGroup
     {
         if ($group->isPaid()) {
             throw ValidationException::withMessages([
                 'status' => ['Esta fatura já foi paga.'],
+            ]);
+        }
+
+        if ($group->isPartiallyPaid()) {
+            throw ValidationException::withMessages([
+                'status' => ['Esta fatura já foi paga parcialmente.'],
             ]);
         }
 
@@ -180,9 +193,18 @@ final class TransactionGroupService
 
         $data = PayTransactionGroupData::fromRequest($request);
 
+        $totalCents = (int) $group->transactions()->sum('amount_cents');
+
+        if ($data->amountCents !== null && $data->amountCents > $totalCents) {
+            throw ValidationException::withMessages([
+                'amount_cents' => ['O valor pago não pode ser maior que o valor da fatura.'],
+            ]);
+        }
+
         try {
-            return DB::transaction(function () use ($group, $data): TransactionGroup {
-                $totalCents = (int) $group->transactions()->sum('amount_cents');
+            return DB::transaction(function () use ($group, $data, $totalCents): TransactionGroup {
+                $paidCents = $data->amountCents ?? $totalCents;
+                $isPartial = $paidCents < $totalCents;
 
                 $paymentTransaction = $this->transactionRepository->create([
                     'user_id' => $group->user_id,
@@ -192,13 +214,14 @@ final class TransactionGroupService
                     'entry_type' => TransactionEntryType::SINGLE,
                     'status' => TransactionStatus::PAID,
                     'description' => 'Pagamento '.$group->display_name,
-                    'amount_cents' => $totalCents,
+                    'amount_cents' => $paidCents,
                     'due_date' => $data->paidAt->toDateString(),
                     'paid_at' => $data->paidAt,
                 ]);
 
                 return $this->repository->update($group, [
-                    'status' => TransactionGroupStatus::PAID,
+                    'status' => $isPartial ? TransactionGroupStatus::PARTIALLY_PAID : TransactionGroupStatus::PAID,
+                    'paid_amount_cents' => $paidCents,
                     'paid_at' => $data->paidAt,
                     'payment_account_id' => $data->paymentAccountId,
                     'payment_transaction_id' => $paymentTransaction->id,

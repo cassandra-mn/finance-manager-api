@@ -35,6 +35,7 @@ class TransactionGroup extends Model
         'status',
         'payment_account_id',
         'payment_transaction_id',
+        'paid_amount_cents',
         'paid_at',
         'notes',
     ];
@@ -47,6 +48,7 @@ class TransactionGroup extends Model
             'reference_month' => 'date',
             'closing_date' => 'date',
             'due_date' => 'date',
+            'paid_amount_cents' => 'integer',
             'paid_at' => 'datetime',
         ];
     }
@@ -115,6 +117,11 @@ class TransactionGroup extends Model
         return $this->status === TransactionGroupStatus::PAID;
     }
 
+    public function isPartiallyPaid(): bool
+    {
+        return $this->status === TransactionGroupStatus::PARTIALLY_PAID;
+    }
+
     public function isOverdue(): bool
     {
         return $this->status === TransactionGroupStatus::CLOSED
@@ -126,6 +133,7 @@ class TransactionGroup extends Model
     {
         return Attribute::get(fn (): TransactionGroupDisplayStatus => match (true) {
             $this->status === TransactionGroupStatus::PAID => TransactionGroupDisplayStatus::PAID,
+            $this->status === TransactionGroupStatus::PARTIALLY_PAID => TransactionGroupDisplayStatus::PARTIALLY_PAID,
             $this->status === TransactionGroupStatus::OPEN => TransactionGroupDisplayStatus::OPEN,
             $this->isOverdue() => TransactionGroupDisplayStatus::OVERDUE,
             default => TransactionGroupDisplayStatus::PENDING,
@@ -148,6 +156,12 @@ class TransactionGroup extends Model
     public function open(Builder $query): Builder
     {
         return $query->where('status', TransactionGroupStatus::OPEN->value);
+    }
+
+    #[Scope]
+    public function partiallyPaid(Builder $query): Builder
+    {
+        return $query->where('status', TransactionGroupStatus::PARTIALLY_PAID->value);
     }
 
     #[Scope]

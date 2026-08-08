@@ -29,6 +29,7 @@ class TransactionResource extends JsonResource
             'effective_status_label' => $this->effective_display_status->label(),
             'description' => $this->description,
             'amount_cents' => $this->amount_cents,
+            'paid_amount_cents' => $this->paid_amount_cents,
             'due_date' => $this->due_date?->toDateString(),
             'paid_at' => $this->paid_at,
             'notes' => $this->notes,

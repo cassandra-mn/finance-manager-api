@@ -141,4 +141,22 @@ final class TransactionRepository
             ->orderByDesc('total_cents')
             ->get();
     }
+
+    /**
+     * Soma, por mês de pagamento, o quanto ficou pendente em transações
+     * pagas parcialmente (amount_cents - paid_amount_cents) num intervalo.
+     * Usado por PartialPaymentsService — só estatística, não afeta pendências.
+     *
+     * @return Collection<int, object{month:string, shortfall_cents:int, count:int}>
+     */
+    public function sumPartiallyPaidShortfallByMonth(int $userId, Carbon $from, Carbon $to): Collection
+    {
+        return Transaction::query()
+            ->forUser($userId)
+            ->where('status', TransactionStatus::PARTIALLY_PAID->value)
+            ->whereBetween('paid_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->selectRaw("to_char(paid_at, 'YYYY-MM') as month, SUM(amount_cents - paid_amount_cents) as shortfall_cents, COUNT(*) as count")
+            ->groupBy('month')
+            ->get();
+    }
 }

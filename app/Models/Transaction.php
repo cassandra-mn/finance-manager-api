@@ -38,6 +38,7 @@ class Transaction extends Model
         'status',
         'description',
         'amount_cents',
+        'paid_amount_cents',
         'due_date',
         'paid_at',
         'notes',
@@ -51,6 +52,7 @@ class Transaction extends Model
             'status' => TransactionStatus::class,
             'origin' => TransactionOrigin::class,
             'amount_cents' => 'integer',
+            'paid_amount_cents' => 'integer',
             'due_date' => 'date',
             'paid_at' => 'datetime',
         ];
@@ -102,6 +104,11 @@ class Transaction extends Model
         return $this->status === TransactionStatus::PAID;
     }
 
+    public function isPartiallyPaid(): bool
+    {
+        return $this->status === TransactionStatus::PARTIALLY_PAID;
+    }
+
     public function isCancelled(): bool
     {
         return $this->status === TransactionStatus::CANCELLED;
@@ -112,6 +119,7 @@ class Transaction extends Model
         return Attribute::get(fn (): TransactionDisplayStatus => match (true) {
             $this->status === TransactionStatus::CANCELLED => TransactionDisplayStatus::CANCELLED,
             $this->status === TransactionStatus::PAID => TransactionDisplayStatus::PAID,
+            $this->status === TransactionStatus::PARTIALLY_PAID => TransactionDisplayStatus::PARTIALLY_PAID,
             $this->isOverdue() => TransactionDisplayStatus::OVERDUE,
             default => TransactionDisplayStatus::PENDING,
         });
@@ -138,6 +146,7 @@ class Transaction extends Model
 
             return match (true) {
                 $group->isPaid() => TransactionDisplayStatus::PAID,
+                $group->isPartiallyPaid() => TransactionDisplayStatus::PARTIALLY_PAID,
                 $group->isOverdue() => TransactionDisplayStatus::OVERDUE,
                 default => TransactionDisplayStatus::PENDING,
             };
@@ -172,6 +181,12 @@ class Transaction extends Model
     public function paid(Builder $query): Builder
     {
         return $query->where('status', TransactionStatus::PAID->value);
+    }
+
+    #[Scope]
+    public function partiallyPaid(Builder $query): Builder
+    {
+        return $query->where('status', TransactionStatus::PARTIALLY_PAID->value);
     }
 
     #[Scope]

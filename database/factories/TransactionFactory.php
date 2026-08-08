@@ -42,6 +42,15 @@ class TransactionFactory extends Factory
         ]);
     }
 
+    public function partiallyPaid(int $paidAmountCents): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => TransactionStatus::PARTIALLY_PAID,
+            'paid_amount_cents' => $paidAmountCents,
+            'paid_at' => Carbon::now(),
+        ]);
+    }
+
     public function overdue(): static
     {
         return $this->state(fn (array $attributes) => [

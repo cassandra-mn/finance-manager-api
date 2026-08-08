@@ -26,8 +26,22 @@ final class AccountBalanceService
             ->where('type', TransactionType::EXPENSE->value)
             ->sum('amount_cents');
 
+        // Pagamento parcial: só o valor efetivamente pago saiu da conta — o
+        // restante (amount_cents - paid_amount_cents) fica de fora do saldo,
+        // já que não é uma pendência rastreada pelo app (ver TransactionService
+        // ::markAsPaid / PartialPaymentsService).
+        $partiallyPaidIncomeCents = (int) $account->transactions()
+            ->where('status', TransactionStatus::PARTIALLY_PAID->value)
+            ->where('type', TransactionType::INCOME->value)
+            ->sum('paid_amount_cents');
+
+        $partiallyPaidExpenseCents = (int) $account->transactions()
+            ->where('status', TransactionStatus::PARTIALLY_PAID->value)
+            ->where('type', TransactionType::EXPENSE->value)
+            ->sum('paid_amount_cents');
+
         return Money::fromCents($account->initial_balance_cents)
-            ->add(Money::fromCents($paidIncomeCents))
-            ->subtract(Money::fromCents($paidExpenseCents));
+            ->add(Money::fromCents($paidIncomeCents + $partiallyPaidIncomeCents))
+            ->subtract(Money::fromCents($paidExpenseCents + $partiallyPaidExpenseCents));
     }
 }

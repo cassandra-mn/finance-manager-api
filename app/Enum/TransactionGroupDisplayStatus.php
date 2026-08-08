@@ -12,6 +12,7 @@ enum TransactionGroupDisplayStatus: string
     case OPEN = 'open';
     case PENDING = 'pending';
     case OVERDUE = 'overdue';
+    case PARTIALLY_PAID = 'partially_paid';
     case PAID = 'paid';
 
     public function label(): string
@@ -20,6 +21,7 @@ enum TransactionGroupDisplayStatus: string
             self::OPEN => 'Aberta',
             self::PENDING => 'Pendente',
             self::OVERDUE => 'Atrasada',
+            self::PARTIALLY_PAID => 'Parcialmente Paga',
             self::PAID => 'Paga',
         };
     }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Transactions\ListTransactionsRequest;
+use App\Http\Requests\Transactions\PayTransactionRequest;
 use App\Http\Requests\Transactions\StoreTransactionRequest;
 use App\Http\Requests\Transactions\UpdateTransactionRequest;
 use App\Http\Resources\Transactions\TransactionResource;
@@ -53,9 +54,9 @@ class TransactionController extends Controller
         return response()->json(null, Response::HTTP_NO_CONTENT);
     }
 
-    public function pay(Transaction $transaction): JsonResponse
+    public function pay(PayTransactionRequest $request, Transaction $transaction): JsonResponse
     {
-        $transaction = $this->service->markAsPaid($transaction);
+        $transaction = $this->service->markAsPaid($transaction, $request->integer('amount_cents') ?: null);
 
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
