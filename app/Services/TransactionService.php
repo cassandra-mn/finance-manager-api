@@ -160,6 +160,36 @@ final class TransactionService
         }
     }
 
+    /**
+     * Reverte uma transação paga (ou parcialmente paga) de volta para
+     * pendente — ex.: a pessoa marcou como paga sem querer. Limpa o valor e
+     * a data de pagamento; não afeta o saldo retroativamente, o saldo já se
+     * recalcula sozinho a partir do status atual.
+     */
+    public function markAsPending(Transaction $transaction): Transaction
+    {
+        if (! $transaction->isPaid() && ! $transaction->isPartiallyPaid()) {
+            throw ValidationException::withMessages([
+                'status' => ['Só é possível reverter para pendente uma transação paga ou parcialmente paga.'],
+            ]);
+        }
+
+        try {
+            return $this->repository->update($transaction, [
+                'status' => TransactionStatus::PENDING,
+                'paid_amount_cents' => null,
+                'paid_at' => null,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('finance.transactions.mark_as_pending_failed', [
+                'transaction_id' => $transaction->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw new ServiceException('Não foi possível reverter a transação para pendente.', previous: $e);
+        }
+    }
+
     public function cancel(Transaction $transaction): Transaction
     {
         if ($transaction->isGrouped()) {

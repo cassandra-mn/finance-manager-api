@@ -48,6 +48,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
         Route::apiResource('budgets', BudgetController::class);
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
+        Route::post('transactions/{transaction}/unpay', [TransactionController::class, 'unpay'])->name('transactions.unpay');
         Route::post('transactions/{transaction}/cancel', [TransactionController::class, 'cancel'])->name('transactions.cancel');
 
         Route::apiResource('transaction-groups', TransactionGroupController::class)
