@@ -434,4 +434,76 @@ class TransactionGroupTest extends TestCase
         $this->getJson("/api/v1/transaction-groups/{$group->id}")->assertNotFound();
         $this->postJson("/api/v1/transaction-groups/{$group->id}/close")->assertNotFound();
     }
+
+    public function test_user_can_manually_create_an_empty_invoice_for_a_chosen_month(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        Sanctum::actingAs($user);
+
+        $response = $this->postJson('/api/v1/transaction-groups', [
+            'account_id' => $account->id,
+            'reference_month' => '2026-07',
+        ]);
+
+        $response->assertCreated()
+            ->assertJsonPath('status', 'open')
+            ->assertJsonPath('reference_month', '2026-07-01')
+            ->assertJsonPath('closing_date', '2026-06-25')
+            ->assertJsonPath('due_date', '2026-07-05')
+            ->assertJsonPath('total_cents', 0);
+
+        $this->assertSame(1, TransactionGroup::query()->count());
+    }
+
+    public function test_cannot_manually_create_an_invoice_for_a_month_that_already_has_one(): void
+    {
+        $user = User::factory()->create();
+        $account = $this->creditCardAccount($user);
+        Sanctum::actingAs($user);
+
+        $this->createTransaction($user, $account, '2026-07-10');
+
+        $this->postJson('/api/v1/transaction-groups', [
+            'account_id' => $account->id,
+            'reference_month' => '2026-08',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['reference_month']);
+    }
+
+    public function test_cannot_manually_create_an_invoice_for_a_regular_account(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/transaction-groups', [
+            'account_id' => $account->id,
+            'reference_month' => '2026-07',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['account_id']);
+    }
+
+    public function test_cannot_manually_create_an_invoice_for_a_credit_card_without_invoice_due_day(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create(['type' => AccountType::CREDIT_CARD]);
+        Sanctum::actingAs($user);
+
+        $this->postJson('/api/v1/transaction-groups', [
+            'account_id' => $account->id,
+            'reference_month' => '2026-07',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['account_id']);
+    }
+
+    public function test_user_cannot_manually_create_an_invoice_for_another_users_account(): void
+    {
+        $userA = User::factory()->create();
+        $userB = User::factory()->create();
+        $accountB = $this->creditCardAccount($userB);
+
+        Sanctum::actingAs($userA);
+        $this->postJson('/api/v1/transaction-groups', [
+            'account_id' => $accountB->id,
+            'reference_month' => '2026-07',
+        ])->assertUnprocessable()->assertJsonValidationErrors(['account_id']);
+    }
 }

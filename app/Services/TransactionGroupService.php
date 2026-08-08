@@ -3,9 +3,11 @@
 namespace App\Services;
 
 use App\Data\TransactionGroups\CloseDueCreditCardInvoicesSummary;
+use App\Data\TransactionGroups\CreateTransactionGroupData;
 use App\Data\TransactionGroups\PayTransactionGroupData;
 use App\Data\TransactionGroups\TransactionGroupFiltersData;
 use App\Data\TransactionGroups\UpdateTransactionGroupData;
+use App\Enum\AccountType;
 use App\Enum\TransactionEntryType;
 use App\Enum\TransactionGroupStatus;
 use App\Enum\TransactionGroupType;
@@ -14,9 +16,11 @@ use App\Enum\TransactionType;
 use App\Exceptions\ServiceException;
 use App\Http\Requests\TransactionGroups\ListTransactionGroupsRequest;
 use App\Http\Requests\TransactionGroups\PayTransactionGroupRequest;
+use App\Http\Requests\TransactionGroups\StoreTransactionGroupRequest;
 use App\Http\Requests\TransactionGroups\UpdateTransactionGroupRequest;
 use App\Models\Account;
 use App\Models\TransactionGroup;
+use App\Repositories\AccountRepository;
 use App\Repositories\TransactionGroupRepository;
 use App\Repositories\TransactionRepository;
 use App\Support\CreditCardCycleResolver;
@@ -29,16 +33,18 @@ use Illuminate\Validation\ValidationException;
 use Throwable;
 
 /**
- * Faturas de cartão de crédito são criadas/reaproveitadas automaticamente
- * (ver resolveOrCreateForCreditCardPurchase, chamado por TransactionService
- * e StatementImportService), nunca via endpoint de criação — por isso não há
- * `create()` público aqui nesta etapa.
+ * Faturas de cartão de crédito normalmente são criadas/reaproveitadas
+ * automaticamente (ver resolveOrCreateForCreditCardPurchase, chamado por
+ * TransactionService e StatementImportService); create() cobre o caso de a
+ * pessoa querer adiantar/registrar manualmente uma fatura de um mês
+ * específico (ex.: um mês que ainda não teve nenhuma compra lançada).
  */
 final class TransactionGroupService
 {
     public function __construct(
         private readonly TransactionGroupRepository $repository,
         private readonly TransactionRepository $transactionRepository,
+        private readonly AccountRepository $accountRepository,
     ) {}
 
     /** @return Collection<int, TransactionGroup> */
@@ -91,6 +97,54 @@ final class TransactionGroupService
         }
 
         return $group;
+    }
+
+    /**
+     * Cria manualmente uma fatura vazia para um cartão/mês escolhido pela
+     * pessoa (ex.: registrar uma fatura de um mês passado que ainda não foi
+     * lançada no app). Usa o mesmo cálculo de ciclo de resolveOrCreate...,
+     * só que partindo do mês de referência em vez de uma data de compra.
+     */
+    public function create(StoreTransactionGroupRequest $request): TransactionGroup
+    {
+        $data = CreateTransactionGroupData::fromRequest($request);
+        $account = $this->accountRepository->find($data->accountId);
+
+        if ($account === null || $account->type !== AccountType::CREDIT_CARD || $account->invoice_due_day === null) {
+            throw ValidationException::withMessages([
+                'account_id' => ['Selecione um cartão de crédito com dia de vencimento configurado.'],
+            ]);
+        }
+
+        $existing = $this->repository->findForAccountAndMonth($account->id, $data->referenceMonth);
+        if ($existing !== null) {
+            $label = $data->referenceMonth->translatedFormat('F/Y');
+
+            throw ValidationException::withMessages([
+                'reference_month' => ["Já existe uma fatura para {$label} neste cartão."],
+            ]);
+        }
+
+        $cycle = CreditCardCycleResolver::forReferenceMonth($account, $data->referenceMonth);
+
+        try {
+            return $this->repository->create([
+                'user_id' => $account->user_id,
+                'account_id' => $account->id,
+                'type' => TransactionGroupType::CREDIT_CARD_INVOICE,
+                'reference_month' => $cycle->referenceMonth,
+                'closing_date' => $cycle->closingDate,
+                'due_date' => $cycle->dueDate,
+                'status' => TransactionGroupStatus::OPEN,
+            ]);
+        } catch (Throwable $e) {
+            Log::error('finance.transaction_groups.create_failed', [
+                'account_id' => $account->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            throw new ServiceException('Não foi possível criar a fatura.', previous: $e);
+        }
     }
 
     public function update(TransactionGroup $group, UpdateTransactionGroupRequest $request): TransactionGroup

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\TransactionGroups\ListTransactionGroupsRequest;
 use App\Http\Requests\TransactionGroups\PayTransactionGroupRequest;
+use App\Http\Requests\TransactionGroups\StoreTransactionGroupRequest;
 use App\Http\Requests\TransactionGroups\UpdateTransactionGroupRequest;
 use App\Http\Resources\TransactionGroups\TransactionGroupResource;
 use App\Models\TransactionGroup;
@@ -23,6 +24,15 @@ class TransactionGroupController extends Controller
         $groups = $this->service->listForUser($request);
 
         return TransactionGroupResource::collection($groups)->response();
+    }
+
+    public function store(StoreTransactionGroupRequest $request): JsonResponse
+    {
+        $transactionGroup = $this->service->create($request);
+
+        return (new TransactionGroupResource($transactionGroup->load(['account'])))
+            ->response()
+            ->setStatusCode(Response::HTTP_CREATED);
     }
 
     public function show(TransactionGroup $transactionGroup): JsonResponse

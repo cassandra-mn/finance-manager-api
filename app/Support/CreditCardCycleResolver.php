@@ -47,6 +47,32 @@ final class CreditCardCycleResolver
         );
     }
 
+    /**
+     * Resolve o ciclo a partir de um reference_month já conhecido (mês de
+     * vencimento) em vez de uma data de compra — usado na criação manual de
+     * fatura, onde a pessoa escolhe o mês diretamente. É o inverso de
+     * resolve(): parte do vencimento e volta pro fechamento correspondente.
+     */
+    public static function forReferenceMonth(Account $account, Carbon $referenceMonth): CreditCardInvoiceCycle
+    {
+        $dueDay = (int) $account->invoice_due_day;
+        $closingDay = (int) $account->effective_invoice_closing_day;
+
+        $dueMonthAnchor = $referenceMonth->copy()->startOfMonth();
+        $dueDate = self::dateForDay($dueMonthAnchor, $dueDay);
+
+        $closingMonthAnchor = $dueDay >= $closingDay
+            ? $dueMonthAnchor
+            : $dueMonthAnchor->copy()->subMonthNoOverflow();
+        $closingDate = self::dateForDay($closingMonthAnchor, $closingDay);
+
+        return new CreditCardInvoiceCycle(
+            referenceMonth: $dueMonthAnchor,
+            closingDate: $closingDate,
+            dueDate: $dueDate,
+        );
+    }
+
     private static function dateForDay(Carbon $monthAnchor, int $day): Carbon
     {
         $start = $monthAnchor->copy()->startOfMonth();
