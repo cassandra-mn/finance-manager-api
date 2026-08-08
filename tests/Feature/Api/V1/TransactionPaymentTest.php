@@ -100,4 +100,69 @@ class TransactionPaymentTest extends TestCase
             ->assertOk()
             ->assertJsonPath('status', 'cancelled');
     }
+
+    public function test_reverting_a_paid_transaction_back_to_pending(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $transaction = Transaction::factory()->for($user)->for($account)->create(['amount_cents' => 20000]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/transactions/{$transaction->id}/pay")->assertOk();
+
+        $response = $this->postJson("/api/v1/transactions/{$transaction->id}/unpay");
+
+        $response->assertOk()->assertJsonPath('status', 'pending');
+
+        $fresh = $transaction->fresh();
+        $this->assertSame('pending', $fresh->status->value);
+        $this->assertNull($fresh->paid_at);
+        $this->assertNull($fresh->paid_amount_cents);
+    }
+
+    public function test_reverting_a_partially_paid_transaction_back_to_pending(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $transaction = Transaction::factory()->for($user)->for($account)->create(['amount_cents' => 20000]);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/transactions/{$transaction->id}/pay", ['amount_cents' => 5000])->assertOk();
+
+        $this->postJson("/api/v1/transactions/{$transaction->id}/unpay")
+            ->assertOk()
+            ->assertJsonPath('status', 'pending');
+
+        $fresh = $transaction->fresh();
+        $this->assertNull($fresh->paid_at);
+        $this->assertNull($fresh->paid_amount_cents);
+    }
+
+    public function test_cannot_revert_a_pending_transaction_to_pending(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $transaction = Transaction::factory()->for($user)->for($account)->create();
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/transactions/{$transaction->id}/unpay")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+    }
+
+    public function test_cannot_revert_a_cancelled_transaction_to_pending(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $transaction = Transaction::factory()->for($user)->for($account)->create(['status' => 'cancelled']);
+
+        Sanctum::actingAs($user);
+
+        $this->postJson("/api/v1/transactions/{$transaction->id}/unpay")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['status']);
+    }
 }

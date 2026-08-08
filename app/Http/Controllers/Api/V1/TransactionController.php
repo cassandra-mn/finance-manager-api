@@ -67,4 +67,11 @@ class TransactionController extends Controller
 
         return (new TransactionResource($transaction->load(['account', 'category'])))->response();
     }
+
+    public function unpay(Transaction $transaction): JsonResponse
+    {
+        $transaction = $this->service->markAsPending($transaction);
+
+        return (new TransactionResource($transaction->load(['account', 'category'])))->response();
+    }
 }
