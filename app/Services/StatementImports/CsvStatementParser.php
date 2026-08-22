@@ -6,6 +6,7 @@ use App\Data\StatementImports\CsvImportMapping;
 use App\Data\StatementImports\ParsedStatementTransaction;
 use App\Enum\TransactionType;
 use Illuminate\Support\Carbon;
+use InvalidArgumentException;
 use Throwable;
 
 /**
@@ -16,11 +17,15 @@ use Throwable;
  * (negativo = despesa, positivo = receita) — o formato usado pela maioria
  * dos bancos brasileiros.
  */
-final class CsvStatementParser
+final class CsvStatementParser implements StatementParser
 {
     /** @return array<int, ParsedStatementTransaction> */
-    public function parse(string $contents, CsvImportMapping $mapping): array
+    public function parse(string $contents, ?CsvImportMapping $mapping): array
     {
+        if ($mapping === null) {
+            throw new InvalidArgumentException('CsvStatementParser requer um CsvImportMapping.');
+        }
+
         $rows = $this->splitRows($contents, $mapping->delimiter);
 
         if ($mapping->hasHeader && $rows !== []) {
