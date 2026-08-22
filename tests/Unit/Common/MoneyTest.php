@@ -54,4 +54,38 @@ class MoneyTest extends TestCase
     {
         $this->assertSame('-R$ 10,00', Money::fromCents(-1000)->format());
     }
+
+    public function test_greater_than(): void
+    {
+        $this->assertTrue(Money::fromCents(1000)->greaterThan(Money::fromCents(999)));
+        $this->assertFalse(Money::fromCents(1000)->greaterThan(Money::fromCents(1000)));
+        $this->assertFalse(Money::fromCents(1000)->greaterThan(Money::fromCents(1001)));
+    }
+
+    public function test_greater_than_or_equal(): void
+    {
+        $this->assertTrue(Money::fromCents(1000)->greaterThanOrEqual(Money::fromCents(1000)));
+        $this->assertTrue(Money::fromCents(1000)->greaterThanOrEqual(Money::fromCents(999)));
+        $this->assertFalse(Money::fromCents(1000)->greaterThanOrEqual(Money::fromCents(1001)));
+    }
+
+    public function test_less_than(): void
+    {
+        $this->assertTrue(Money::fromCents(999)->lessThan(Money::fromCents(1000)));
+        $this->assertFalse(Money::fromCents(1000)->lessThan(Money::fromCents(1000)));
+        $this->assertFalse(Money::fromCents(1001)->lessThan(Money::fromCents(1000)));
+    }
+
+    public function test_less_than_or_equal(): void
+    {
+        $this->assertTrue(Money::fromCents(1000)->lessThanOrEqual(Money::fromCents(1000)));
+        $this->assertTrue(Money::fromCents(999)->lessThanOrEqual(Money::fromCents(1000)));
+        $this->assertFalse(Money::fromCents(1001)->lessThanOrEqual(Money::fromCents(1000)));
+    }
+
+    public function test_equals(): void
+    {
+        $this->assertTrue(Money::fromCents(1000)->equals(Money::fromCents(1000)));
+        $this->assertFalse(Money::fromCents(1000)->equals(Money::fromCents(999)));
+    }
 }

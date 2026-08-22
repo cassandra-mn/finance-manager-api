@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Common\Money;
 use App\Data\Transactions\CreateTransactionData;
 use App\Data\Transactions\TransactionFiltersData;
 use App\Data\Transactions\UpdateTransactionData;
@@ -136,18 +137,21 @@ final class TransactionService
             ]);
         }
 
-        if ($paidAmountCents !== null && $paidAmountCents > $transaction->amount_cents) {
+        $totalAmount = Money::fromCents($transaction->amount_cents);
+        $paidAmount = $paidAmountCents !== null ? Money::fromCents($paidAmountCents) : null;
+
+        if ($paidAmount !== null && $paidAmount->greaterThan($totalAmount)) {
             throw ValidationException::withMessages([
                 'amount_cents' => ['O valor pago não pode ser maior que o valor da transação.'],
             ]);
         }
 
-        $isPartial = $paidAmountCents !== null && $paidAmountCents < $transaction->amount_cents;
+        $isPartial = $paidAmount !== null && $paidAmount->lessThan($totalAmount);
 
         try {
             return $this->repository->update($transaction, [
                 'status' => $isPartial ? TransactionStatus::PARTIALLY_PAID : TransactionStatus::PAID,
-                'paid_amount_cents' => $isPartial ? $paidAmountCents : $transaction->amount_cents,
+                'paid_amount_cents' => $isPartial ? $paidAmount->cents : $totalAmount->cents,
                 'paid_at' => Carbon::now(),
             ]);
         } catch (Throwable $e) {

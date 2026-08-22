@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Common\Money;
 use App\Data\TransactionGroups\CloseDueCreditCardInvoicesSummary;
 use App\Data\TransactionGroups\CreateTransactionGroupData;
 use App\Data\TransactionGroups\PayTransactionGroupData;
@@ -247,18 +248,19 @@ final class TransactionGroupService
 
         $data = PayTransactionGroupData::fromRequest($request);
 
-        $totalCents = (int) $group->transactions()->sum('amount_cents');
+        $totalAmount = Money::fromCents((int) $group->transactions()->sum('amount_cents'));
+        $paidAmount = $data->amountCents !== null ? Money::fromCents($data->amountCents) : null;
 
-        if ($data->amountCents !== null && $data->amountCents > $totalCents) {
+        if ($paidAmount !== null && $paidAmount->greaterThan($totalAmount)) {
             throw ValidationException::withMessages([
                 'amount_cents' => ['O valor pago não pode ser maior que o valor da fatura.'],
             ]);
         }
 
         try {
-            return DB::transaction(function () use ($group, $data, $totalCents): TransactionGroup {
-                $paidCents = $data->amountCents ?? $totalCents;
-                $isPartial = $paidCents < $totalCents;
+            return DB::transaction(function () use ($group, $data, $totalAmount, $paidAmount): TransactionGroup {
+                $paidAmount ??= $totalAmount;
+                $isPartial = $paidAmount->lessThan($totalAmount);
 
                 $paymentTransaction = $this->transactionRepository->create([
                     'user_id' => $group->user_id,
@@ -268,14 +270,14 @@ final class TransactionGroupService
                     'entry_type' => TransactionEntryType::SINGLE,
                     'status' => TransactionStatus::PAID,
                     'description' => 'Pagamento '.$group->display_name,
-                    'amount_cents' => $paidCents,
+                    'amount_cents' => $paidAmount->cents,
                     'due_date' => $data->paidAt->toDateString(),
                     'paid_at' => $data->paidAt,
                 ]);
 
                 return $this->repository->update($group, [
                     'status' => $isPartial ? TransactionGroupStatus::PARTIALLY_PAID : TransactionGroupStatus::PAID,
-                    'paid_amount_cents' => $paidCents,
+                    'paid_amount_cents' => $paidAmount->cents,
                     'paid_at' => $data->paidAt,
                     'payment_account_id' => $data->paymentAccountId,
                     'payment_transaction_id' => $paymentTransaction->id,
