@@ -2,11 +2,13 @@
 
 namespace App\Services;
 
-use App\Enum\TransactionStatus;
 use App\Exceptions\ServiceException;
 use App\Models\User;
 use App\Repositories\AccountRepository;
 use App\Repositories\TransactionRepository;
+use App\Services\Assistant\Commands\AssistantCommand;
+use App\Services\Assistant\Commands\CreateAccountCommand;
+use App\Services\Assistant\Commands\CreateTransactionCommand;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -18,6 +20,15 @@ use Throwable;
  * não misturar "interpretar texto livre" com "gravar no banco" — hoje só o
  * bot do WhatsApp usa isso, já que o frontend web executa as ações
  * confirmadas chamando os endpoints normais de accounts/transactions.
+ *
+ * Cada ação vira um AssistantCommand (Command pattern) antes de ser
+ * executada — execute() abaixo só orquestra o lote (resolve o comando certo
+ * pra cada ação, mantém o mapa de contas recém-criadas, chama execute() de
+ * cada um), sem saber o que cada tipo de ação faz por dentro. As ações
+ * continuam chegando/saindo como arrays com tag (não como os próprios
+ * objetos de Command): esse formato é o que persiste em
+ * WhatsAppSession::context (coluna JSON) entre a proposta e a confirmação
+ * do usuário, e objetos não sobrevivem a esse round-trip por JSON.
  */
 final class AssistantActionExecutorService
 {
@@ -38,30 +49,13 @@ final class AssistantActionExecutorService
                 $results = [];
 
                 foreach ($actions as $action) {
+                    $command = $this->buildCommand($action, $resolvedAccountIds);
+                    $result = $command->execute($user);
+                    $results[] = $result;
+
                     if ($action['kind'] === 'account') {
-                        $account = $this->accountRepository->create(array_merge(
-                            ['user_id' => $user->id],
-                            $action['payload'],
-                        ));
-
-                        $resolvedAccountIds[$action['client_id']] = $account->id;
-                        $results[] = ['kind' => 'account', 'summary' => $action['summary'], 'id' => $account->id];
-
-                        continue;
+                        $resolvedAccountIds[$action['client_id']] = $result['id'];
                     }
-
-                    $accountId = $this->resolveAccountId($action, $user, $resolvedAccountIds);
-
-                    $transaction = $this->transactionRepository->create(array_merge(
-                        $action['payload'],
-                        [
-                            'user_id' => $user->id,
-                            'account_id' => $accountId,
-                            'status' => TransactionStatus::PENDING,
-                        ],
-                    ));
-
-                    $results[] = ['kind' => 'transaction', 'summary' => $action['summary'], 'id' => $transaction->id];
                 }
 
                 return $results;
@@ -76,25 +70,27 @@ final class AssistantActionExecutorService
         }
     }
 
-    /** @param  array<string, int>  $resolvedAccountIds */
-    private function resolveAccountId(array $action, User $user, array $resolvedAccountIds): int
+    /**
+     * @param  array<string, mixed>  $action
+     * @param  array<string, int>  $resolvedAccountIds
+     */
+    private function buildCommand(array $action, array $resolvedAccountIds): AssistantCommand
     {
-        $accountId = $action['payload']['account_id'] ?? null;
-
-        if ($accountId === null) {
-            $accountRef = $action['account_ref'] ?? null;
-
-            if ($accountRef === null || ! isset($resolvedAccountIds[$accountRef])) {
-                throw new RuntimeException('Ação de transação sem account_id/account_ref resolvível.');
-            }
-
-            return $resolvedAccountIds[$accountRef];
-        }
-
-        if (! $this->accountRepository->existsActiveForUser($user->id, (int) $accountId)) {
-            throw new RuntimeException("Conta {$accountId} não existe mais ou foi desativada.");
-        }
-
-        return (int) $accountId;
+        return match ($action['kind']) {
+            'account' => new CreateAccountCommand(
+                $this->accountRepository,
+                $action['summary'],
+                $action['payload'],
+            ),
+            'transaction' => new CreateTransactionCommand(
+                $this->accountRepository,
+                $this->transactionRepository,
+                $action['summary'],
+                $action['payload'],
+                $action['account_ref'] ?? null,
+                $resolvedAccountIds,
+            ),
+            default => throw new RuntimeException("Tipo de ação desconhecido: \"{$action['kind']}\"."),
+        };
     }
 }
