@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1\WhatsApp;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\WhatsApp\WhatsAppLinkCodeResource;
 use App\Services\WhatsAppLinkService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -18,10 +19,7 @@ class WhatsAppLinkController extends Controller
     {
         $result = $this->service->generateLinkCode($request->user());
 
-        return response()->json([
-            'code' => $result['code'],
-            'expires_at' => $result['expires_at'],
-        ]);
+        return (new WhatsAppLinkCodeResource($result))->response();
     }
 
     public function unlink(Request $request): JsonResponse

@@ -11,7 +11,7 @@ use App\Http\Requests\Budgets\BudgetStatusRequest;
 use App\Http\Requests\Budgets\ListBudgetsRequest;
 use App\Http\Requests\Budgets\StoreBudgetRequest;
 use App\Http\Requests\Budgets\UpdateBudgetRequest;
-use App\Http\Resources\Categories\CategoryResource;
+use App\Http\Resources\Budgets\BudgetStatusEntryResource;
 use App\Models\Budget;
 use App\Repositories\BudgetRepository;
 use Illuminate\Database\Eloquent\Collection;
@@ -142,24 +142,11 @@ final class BudgetService
                 'from' => $start->toDateString(),
                 'to' => $end->toDateString(),
             ],
-            'data' => array_map($this->formatEntry(...), $entries),
+            'data' => array_map(
+                static fn (array $entry): array => (new BudgetStatusEntryResource($entry))->resolve(),
+                $entries,
+            ),
             'summary' => $this->buildSummary($entries),
-        ];
-    }
-
-    private function formatEntry(array $entry): array
-    {
-        return [
-            'id' => $entry['budget']->id,
-            'category' => $entry['budget']->category
-                ? (new CategoryResource($entry['budget']->category))->resolve()
-                : null,
-            'amount_cents' => $entry['budget']->amount_cents,
-            'spent_cents' => $entry['spent_cents'],
-            'remaining_cents' => $entry['remaining_cents'],
-            'usage_percentage' => $entry['usage_percentage'],
-            'status' => $entry['status']->value,
-            'status_label' => $entry['status']->label(),
         ];
     }
 
