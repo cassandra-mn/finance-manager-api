@@ -34,16 +34,29 @@ use Throwable;
  * Toda transação importada entra sempre como `status = paid`: representa um
  * lançamento bancário já efetivado, diferente do fluxo pending/paid usado
  * para lançamentos manuais/recorrências.
+ *
+ * O parser em si é resolvido por Strategy (StatementParser): cada formato
+ * suportado é uma implementação intercambiável, escolhida em runtime por
+ * StatementImportFormat — suportar um novo formato não muda este Service,
+ * só adiciona uma nova implementação e uma entrada em $parsers.
  */
 final class StatementImportService
 {
+    /** @var array<string, StatementParser> */
+    private readonly array $parsers;
+
     public function __construct(
-        private readonly OfxStatementParser $ofxParser,
-        private readonly CsvStatementParser $csvParser,
+        OfxStatementParser $ofxParser,
+        CsvStatementParser $csvParser,
         private readonly StatementImportRepository $repository,
         private readonly TransactionRepository $transactionRepository,
         private readonly TransactionGroupService $transactionGroupService,
-    ) {}
+    ) {
+        $this->parsers = [
+            StatementImportFormat::OFX->value => $ofxParser,
+            StatementImportFormat::CSV->value => $csvParser,
+        ];
+    }
 
     /** @return Collection<int, StatementImport> */
     public function listForAccount(Account $account): Collection
@@ -57,10 +70,7 @@ final class StatementImportService
         $contents = (string) $request->file('file')?->get();
 
         try {
-            $parsedTransactions = match ($data->format) {
-                StatementImportFormat::OFX => $this->ofxParser->parse($contents),
-                StatementImportFormat::CSV => $this->csvParser->parse($contents, $data->csvMapping),
-            };
+            $parsedTransactions = $this->parsers[$data->format->value]->parse($contents, $data->csvMapping);
         } catch (Throwable $e) {
             Log::error('finance.statement_imports.parse_failed', [
                 'account_id' => $account->id,

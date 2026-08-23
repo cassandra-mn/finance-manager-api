@@ -2,6 +2,7 @@
 
 namespace App\Services\StatementImports;
 
+use App\Data\StatementImports\CsvImportMapping;
 use App\Data\StatementImports\ParsedStatementTransaction;
 use App\Enum\TransactionType;
 use App\Exceptions\ServiceException;
@@ -14,10 +15,10 @@ use Throwable;
  * e OFX 2.x (XML bem-formado). Extrai apenas os campos de <STMTTRN> usados
  * pela importação — sem depender de nenhuma biblioteca externa.
  */
-final class OfxStatementParser
+final class OfxStatementParser implements StatementParser
 {
     /** @return array<int, ParsedStatementTransaction> */
-    public function parse(string $contents): array
+    public function parse(string $contents, ?CsvImportMapping $mapping = null): array
     {
         $document = $this->loadXml($contents);
         $nodes = $document->xpath('//STMTTRN') ?: [];

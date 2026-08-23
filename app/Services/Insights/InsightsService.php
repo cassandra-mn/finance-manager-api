@@ -9,7 +9,10 @@ use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\PartialPaymentsRequest;
 use App\Http\Requests\Insights\SpendingSummaryRequest;
-use App\Http\Resources\Categories\CategoryResource;
+use App\Http\Resources\Budgets\BudgetStatusEntryResource;
+use App\Http\Resources\Insights\AnomalyDetectionEntryResource;
+use App\Http\Resources\Insights\PartialPaymentEntryResource;
+use App\Http\Resources\Insights\SpendingSummaryResource;
 use App\Repositories\BudgetRepository;
 use App\Services\BudgetStatusService;
 use App\Support\PeriodResolver;
@@ -53,7 +56,7 @@ final class InsightsService
                 'current' => ['from' => $currentStart->toDateString(), 'to' => $currentEnd->toDateString()],
                 'previous' => ['from' => $previousStart->toDateString(), 'to' => $previousEnd->toDateString()],
             ],
-            'data' => $data,
+            'data' => (new SpendingSummaryResource($data))->resolve(),
             'summary' => [
                 'total_expense_cents' => $data['current']['expense_cents'],
                 'top_categories_count' => count($data['top_categories']),
@@ -90,7 +93,10 @@ final class InsightsService
                 'lookback_periods' => $filters->lookbackPeriods,
                 'historical_window' => ['from' => $historicalStart->toDateString(), 'to' => $historicalEnd->toDateString()],
             ],
-            'data' => $data,
+            'data' => array_map(
+                static fn (array $entry): array => (new AnomalyDetectionEntryResource($entry))->resolve(),
+                $data,
+            ),
             'summary' => [
                 'threshold_percentage' => $filters->thresholdPercentage,
                 'anomalies_count' => count(array_filter($data, fn (array $entry): bool => $entry['is_anomalous'])),
@@ -115,7 +121,10 @@ final class InsightsService
                 'from' => $data[0]['month'] ?? null,
                 'to' => $data[count($data) - 1]['month'] ?? null,
             ],
-            'data' => $data,
+            'data' => array_map(
+                static fn (array $entry): array => (new PartialPaymentEntryResource($entry))->resolve(),
+                $data,
+            ),
             'summary' => [
                 'total_shortfall_cents' => array_sum(array_column($data, 'shortfall_cents')),
                 'total_count' => array_sum(array_column($data, 'count')),
@@ -163,27 +172,11 @@ final class InsightsService
                 'days_remaining' => $daysRemaining,
                 'projection_applicable' => $projectionApplicable,
             ],
-            'data' => array_map(fn (array $entry): array => $this->formatBudgetEntry($entry, $projectionApplicable), $entries),
+            'data' => array_map(
+                static fn (array $entry): array => (new BudgetStatusEntryResource($entry, withProjection: true))->resolve(),
+                $entries,
+            ),
             'summary' => $this->buildBudgetSummary($entries, $projectionApplicable),
-        ];
-    }
-
-    private function formatBudgetEntry(array $entry, bool $projectionApplicable): array
-    {
-        return [
-            'id' => $entry['budget']->id,
-            'category' => $entry['budget']->category
-                ? (new CategoryResource($entry['budget']->category))->resolve()
-                : null,
-            'amount_cents' => $entry['budget']->amount_cents,
-            'spent_cents' => $entry['spent_cents'],
-            'remaining_cents' => $entry['remaining_cents'],
-            'usage_percentage' => $entry['usage_percentage'],
-            'status' => $entry['status']->value,
-            'status_label' => $entry['status']->label(),
-            'projected_spent_cents' => $projectionApplicable ? $entry['projected_spent_cents'] : null,
-            'projected_overrun_cents' => $projectionApplicable ? $entry['projected_overrun_cents'] : null,
-            'is_projected_to_exceed' => $projectionApplicable ? $entry['is_projected_to_exceed'] : null,
         ];
     }
 

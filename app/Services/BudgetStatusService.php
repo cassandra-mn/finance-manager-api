@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Common\Money;
 use App\Enum\BudgetStatus;
 use App\Enum\TransactionStatus;
 use App\Enum\TransactionType;
@@ -43,24 +44,29 @@ final class BudgetStatusService
 
         return $budgets->map(function (Budget $budget) use ($spentByCategory): array {
             $spentCents = (int) ($spentByCategory[$budget->category_id] ?? 0);
+            $spent = Money::fromCents($spentCents);
+            $amount = Money::fromCents($budget->amount_cents);
 
             return [
                 'budget' => $budget,
                 'spent_cents' => $spentCents,
-                'remaining_cents' => $budget->amount_cents - $spentCents,
+                'remaining_cents' => $amount->subtract($spent)->cents,
                 'usage_percentage' => round(($spentCents / $budget->amount_cents) * 100, 2),
-                'status' => $this->resolveStatus($spentCents, $budget->amount_cents),
+                'status' => $this->resolveStatus($spent, $amount),
             ];
         })->all();
     }
 
-    private function resolveStatus(int $spentCents, int $amountCents): BudgetStatus
+    private function resolveStatus(Money $spent, Money $amount): BudgetStatus
     {
-        if ($spentCents > $amountCents) {
+        if ($spent->greaterThan($amount)) {
             return BudgetStatus::EXCEEDED;
         }
 
-        if ($spentCents * 100 >= $amountCents * 80) {
+        // Limiar de 80% via multiplicação cruzada de inteiros, não Money:
+        // Money compara valor com valor, não valor com uma fração de outro
+        // valor — aqui a comparação é de razão, não de quantia.
+        if ($spent->cents * 100 >= $amount->cents * 80) {
             return BudgetStatus::WARNING;
         }
 
@@ -83,20 +89,20 @@ final class BudgetStatusService
         $entries = $this->calculate($userId, $budgets, $month, $year);
 
         return array_map(function (array $entry) use ($daysElapsed, $daysInPeriod): array {
-            $spentCents = $entry['spent_cents'];
-            $amountCents = $entry['budget']->amount_cents;
+            $amount = Money::fromCents($entry['budget']->amount_cents);
 
             // Multiplica antes de dividir para não passar por float.
-            $projectedSpentCents = $daysElapsed > 0
-                ? intdiv($spentCents * $daysInPeriod, $daysElapsed)
-                : $spentCents;
+            $projectedSpent = Money::fromCents($daysElapsed > 0
+                ? intdiv($entry['spent_cents'] * $daysInPeriod, $daysElapsed)
+                : $entry['spent_cents']);
 
-            $projectedOverrunCents = max(0, $projectedSpentCents - $amountCents);
+            $isProjectedToExceed = $projectedSpent->greaterThan($amount);
+            $projectedOverrun = $isProjectedToExceed ? $projectedSpent->subtract($amount) : Money::zero();
 
             return $entry + [
-                'projected_spent_cents' => $projectedSpentCents,
-                'projected_overrun_cents' => $projectedOverrunCents,
-                'is_projected_to_exceed' => $projectedSpentCents > $amountCents,
+                'projected_spent_cents' => $projectedSpent->cents,
+                'projected_overrun_cents' => $projectedOverrun->cents,
+                'is_projected_to_exceed' => $isProjectedToExceed,
             ];
         }, $entries);
     }

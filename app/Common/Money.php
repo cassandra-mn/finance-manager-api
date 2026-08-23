@@ -60,6 +60,31 @@ final readonly class Money
         return $this->cents === 0;
     }
 
+    public function greaterThan(self $other): bool
+    {
+        return $this->cents > $other->cents;
+    }
+
+    public function greaterThanOrEqual(self $other): bool
+    {
+        return $this->cents >= $other->cents;
+    }
+
+    public function lessThan(self $other): bool
+    {
+        return $this->cents < $other->cents;
+    }
+
+    public function lessThanOrEqual(self $other): bool
+    {
+        return $this->cents <= $other->cents;
+    }
+
+    public function equals(self $other): bool
+    {
+        return $this->cents === $other->cents;
+    }
+
     public function toAmount(): float
     {
         return $this->cents / 100;

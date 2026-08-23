@@ -5,6 +5,8 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Assistant\AskQuestionRequest;
 use App\Http\Requests\Assistant\QuickAddRequest;
+use App\Http\Resources\Assistant\AskAnswerResource;
+use App\Http\Resources\Assistant\QuickAddResultResource;
 use App\Services\AiAssistantService;
 use Illuminate\Http\JsonResponse;
 
@@ -18,13 +20,13 @@ class AssistantController extends Controller
     {
         $result = $this->service->quickAdd($request->string('message')->toString(), $request->user());
 
-        return response()->json($result);
+        return (new QuickAddResultResource($result))->response();
     }
 
     public function askQuestion(AskQuestionRequest $request): JsonResponse
     {
         $result = $this->service->askQuestion($request->string('message')->toString(), $request->user());
 
-        return response()->json($result);
+        return (new AskAnswerResource($result))->response();
     }
 }
