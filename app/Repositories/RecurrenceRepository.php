@@ -59,4 +59,19 @@ final class RecurrenceRepository
             ->dueBy($windowEnd)
             ->chunkById($chunkSize, $callback);
     }
+
+    /**
+     * Todas as recorrências ativas do usuário, sem filtro de janela — usado
+     * por CashFlowForecastService pra projetar ocorrências futuras a partir
+     * de next_due_date, indo além da janela curta de geração automática.
+     *
+     * @return Collection<int, Recurrence>
+     */
+    public function listActiveForUser(int $userId): Collection
+    {
+        return Recurrence::query()
+            ->forUser($userId)
+            ->active()
+            ->get();
+    }
 }

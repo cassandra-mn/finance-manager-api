@@ -29,4 +29,12 @@ return [
          */
         'lookback_months' => (int) env('INSIGHTS_PARTIAL_PAYMENTS_LOOKBACK_MONTHS', 6),
     ],
+
+    'cash_flow_forecast' => [
+        /*
+         * Quantos meses (incluindo o atual) entram na projeção de fluxo de
+         * caixa futuro, quando não informado na requisição.
+         */
+        'months' => (int) env('INSIGHTS_CASH_FLOW_FORECAST_MONTHS', 3),
+    ],
 ];

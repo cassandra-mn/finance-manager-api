@@ -68,6 +68,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('anomalies', [InsightsController::class, 'anomalies'])->name('anomalies');
             Route::get('budget-projection', [InsightsController::class, 'budgetProjection'])->name('budget-projection');
             Route::get('partial-payments', [InsightsController::class, 'partialPayments'])->name('partial-payments');
+            Route::get('cash-flow-forecast', [InsightsController::class, 'cashFlowForecast'])->name('cash-flow-forecast');
         });
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {
