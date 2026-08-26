@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\GoalController;
 use App\Http\Controllers\Api\V1\InsightsController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\StatementImportController;
@@ -46,6 +47,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('budgets/status', [BudgetController::class, 'status'])->name('budgets.status');
         Route::apiResource('budgets', BudgetController::class);
+        Route::apiResource('goals', GoalController::class);
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
         Route::post('transactions/{transaction}/unpay', [TransactionController::class, 'unpay'])->name('transactions.unpay');
