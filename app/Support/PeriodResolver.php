@@ -64,6 +64,18 @@ final class PeriodResolver
     }
 
     /**
+     * Resolve o mesmo período de $currentStart, um ano antes — "agosto/2025"
+     * pro "agosto/2026", não "o período anterior" (que seria julho/2026).
+     * Comparação ano a ano (YoY), diferente de previous().
+     *
+     * @return array{0: Carbon, 1: Carbon}
+     */
+    public static function previousYear(TransactionPeriod $period, Carbon $currentStart): array
+    {
+        return self::resolve($period, $currentStart->copy()->subYear());
+    }
+
+    /**
      * @return array{0: Carbon, 1: Carbon}
      */
     private static function resolveFortnight(Carbon $reference): array

@@ -19,6 +19,7 @@ class SpendingSummaryRequest extends FormRequest
             'period' => ['sometimes', new Enum(TransactionPeriod::class)],
             'reference_date' => ['sometimes', 'date'],
             'top_categories' => ['sometimes', 'integer', 'between:1,20'],
+            'compare_to' => ['sometimes', 'in:previous_period,previous_year'],
         ];
     }
 }

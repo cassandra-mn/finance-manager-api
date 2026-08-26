@@ -12,6 +12,7 @@ final readonly class SpendingSummaryFiltersData
         public TransactionPeriod $period,
         public Carbon $referenceDate,
         public int $topCategories,
+        public string $compareTo,
     ) {}
 
     public static function fromRequest(SpendingSummaryRequest $request): self
@@ -26,6 +27,9 @@ final readonly class SpendingSummaryFiltersData
             topCategories: $request->filled('top_categories')
                 ? (int) $request->integer('top_categories')
                 : (int) config('insights.top_categories'),
+            compareTo: $request->filled('compare_to')
+                ? $request->string('compare_to')->toString()
+                : 'previous_period',
         );
     }
 }
