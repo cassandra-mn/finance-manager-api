@@ -3,15 +3,23 @@
 namespace App\Services\Insights;
 
 use App\Data\Insights\AnomalyDetectionFiltersData;
+use App\Data\Insights\CashFlowForecastFiltersData;
+use App\Data\Insights\NetWorthHistoryFiltersData;
 use App\Data\Insights\PartialPaymentsFiltersData;
 use App\Data\Insights\SpendingSummaryFiltersData;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
+use App\Http\Requests\Insights\CashFlowForecastRequest;
+use App\Http\Requests\Insights\NetWorthHistoryRequest;
 use App\Http\Requests\Insights\PartialPaymentsRequest;
+use App\Http\Requests\Insights\RecurringCommitmentsRequest;
 use App\Http\Requests\Insights\SpendingSummaryRequest;
 use App\Http\Resources\Budgets\BudgetStatusEntryResource;
 use App\Http\Resources\Insights\AnomalyDetectionEntryResource;
+use App\Http\Resources\Insights\CashFlowForecastEntryResource;
+use App\Http\Resources\Insights\NetWorthHistoryEntryResource;
 use App\Http\Resources\Insights\PartialPaymentEntryResource;
+use App\Http\Resources\Insights\RecurringCommitmentEntryResource;
 use App\Http\Resources\Insights\SpendingSummaryResource;
 use App\Repositories\BudgetRepository;
 use App\Services\BudgetStatusService;
@@ -31,6 +39,9 @@ final class InsightsService
         private readonly AnomalyDetectionService $anomalyDetectionService,
         private readonly BudgetStatusService $budgetStatusService,
         private readonly PartialPaymentsService $partialPaymentsService,
+        private readonly CashFlowForecastService $cashFlowForecastService,
+        private readonly NetWorthHistoryService $netWorthHistoryService,
+        private readonly RecurringCommitmentsService $recurringCommitmentsService,
         private readonly BudgetRepository $budgetRepository,
     ) {}
 
@@ -129,6 +140,82 @@ final class InsightsService
                 'total_shortfall_cents' => array_sum(array_column($data, 'shortfall_cents')),
                 'total_count' => array_sum(array_column($data, 'count')),
             ],
+        ];
+    }
+
+    public function cashFlowForecast(CashFlowForecastRequest $request): array
+    {
+        $filters = CashFlowForecastFiltersData::fromRequest($request);
+
+        $data = $this->cashFlowForecastService->project($request->user()->id, $filters->referenceDate, $filters->months);
+
+        $balances = array_column($data, 'projected_balance_cents');
+        $startingBalanceCents = ($data[0]['projected_balance_cents'] ?? 0) - ($data[0]['net_cents'] ?? 0);
+        $negativeMonths = array_filter($balances, static fn (int $cents): bool => $cents < 0);
+
+        return [
+            'reference_period' => [
+                'months' => $filters->months,
+                'from' => $data[0]['month'] ?? null,
+                'to' => $data[count($data) - 1]['month'] ?? null,
+                'starting_balance_cents' => $startingBalanceCents,
+            ],
+            'data' => array_map(
+                static fn (array $entry): array => (new CashFlowForecastEntryResource($entry))->resolve(),
+                $data,
+            ),
+            'summary' => [
+                'total_projected_income_cents' => array_sum(array_column($data, 'income_cents')),
+                'total_projected_expense_cents' => array_sum(array_column($data, 'expense_cents')),
+                'ending_balance_cents' => $balances === [] ? $startingBalanceCents : end($balances),
+                'lowest_projected_balance_cents' => $balances === [] ? $startingBalanceCents : min($balances),
+                'months_with_negative_balance_count' => count($negativeMonths),
+            ],
+        ];
+    }
+
+    public function netWorthHistory(NetWorthHistoryRequest $request): array
+    {
+        $filters = NetWorthHistoryFiltersData::fromRequest($request);
+
+        $data = $this->netWorthHistoryService->history($request->user()->id, $filters->referenceDate, $filters->lookbackMonths);
+
+        $startingBalanceCents = $data[0]['balance_cents'] ?? 0;
+        $endingBalanceCents = $data === [] ? 0 : $data[count($data) - 1]['balance_cents'];
+        $changeCents = $endingBalanceCents - $startingBalanceCents;
+
+        return [
+            'reference_period' => [
+                'lookback_months' => $filters->lookbackMonths,
+                'from' => $data[0]['month'] ?? null,
+                'to' => $data[count($data) - 1]['month'] ?? null,
+            ],
+            'data' => array_map(
+                static fn (array $entry): array => (new NetWorthHistoryEntryResource($entry))->resolve(),
+                $data,
+            ),
+            'summary' => [
+                'starting_balance_cents' => $startingBalanceCents,
+                'ending_balance_cents' => $endingBalanceCents,
+                'change_cents' => $changeCents,
+                'change_percentage' => $startingBalanceCents !== 0
+                    ? round($changeCents / abs($startingBalanceCents) * 100, 2)
+                    : null,
+            ],
+        ];
+    }
+
+    public function recurringCommitments(RecurringCommitmentsRequest $request): array
+    {
+        $entries = $this->recurringCommitmentsService->list($request->user()->id);
+        $summary = $this->recurringCommitmentsService->summarize($entries);
+
+        return [
+            'data' => array_map(
+                static fn (array $entry): array => (new RecurringCommitmentEntryResource($entry))->resolve(),
+                $entries,
+            ),
+            'summary' => $summary,
         ];
     }
 

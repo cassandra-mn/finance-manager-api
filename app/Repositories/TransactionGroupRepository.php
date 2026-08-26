@@ -3,6 +3,7 @@
 namespace App\Repositories;
 
 use App\Data\TransactionGroups\TransactionGroupFiltersData;
+use App\Enum\TransactionGroupStatus;
 use App\Models\TransactionGroup;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Collection;
@@ -74,6 +75,24 @@ final class TransactionGroupRepository
             ->forUser($userId)
             ->partiallyPaid()
             ->whereBetween('paid_at', [$from->copy()->startOfDay(), $to->copy()->endOfDay()])
+            ->with('transactions')
+            ->get();
+    }
+
+    /**
+     * Faturas ainda não pagas (abertas ou fechadas) com vencimento num
+     * intervalo futuro — usado por CashFlowForecastService pra somar o
+     * compromisso de cartão de crédito já conhecido em cada mês projetado.
+     * Faturas pagas/parcialmente pagas ficam de fora (já resolvidas).
+     *
+     * @return Collection<int, TransactionGroup>
+     */
+    public function listUnpaidWithDueBetween(int $userId, Carbon $from, Carbon $to): Collection
+    {
+        return TransactionGroup::query()
+            ->forUser($userId)
+            ->whereIn('status', [TransactionGroupStatus::OPEN->value, TransactionGroupStatus::CLOSED->value])
+            ->whereBetween('due_date', [$from->toDateString(), $to->toDateString()])
             ->with('transactions')
             ->get();
     }

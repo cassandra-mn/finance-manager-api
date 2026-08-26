@@ -159,4 +159,26 @@ final class TransactionRepository
             ->groupBy('month')
             ->get();
     }
+
+    /**
+     * Soma, por mês de vencimento e tipo, as transações avulsas (não
+     * agrupadas numa fatura de cartão) pendentes num intervalo futuro. Usado
+     * por CashFlowForecastService — exclui transações agrupadas porque essas
+     * são cobertas separadamente pelo total da fatura em aberto
+     * (TransactionGroupRepository::listUnpaidWithDueBetween), evitando somar
+     * a mesma compra duas vezes.
+     *
+     * @return Collection<int, object{month:string, type:string, total_cents:int}>
+     */
+    public function sumPendingUngroupedByMonth(int $userId, Carbon $from, Carbon $to): Collection
+    {
+        return Transaction::query()
+            ->forUser($userId)
+            ->where('status', TransactionStatus::PENDING->value)
+            ->whereNull('transaction_group_id')
+            ->whereBetween('due_date', [$from->toDateString(), $to->toDateString()])
+            ->selectRaw("to_char(due_date, 'YYYY-MM') as month, type, SUM(amount_cents) as total_cents")
+            ->groupBy('month', 'type')
+            ->get();
+    }
 }

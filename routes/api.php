@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\AssistantController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\BudgetController;
 use App\Http\Controllers\Api\V1\CategoryController;
+use App\Http\Controllers\Api\V1\GoalController;
 use App\Http\Controllers\Api\V1\InsightsController;
 use App\Http\Controllers\Api\V1\RecurrenceController;
 use App\Http\Controllers\Api\V1\StatementImportController;
@@ -46,6 +47,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
 
         Route::get('budgets/status', [BudgetController::class, 'status'])->name('budgets.status');
         Route::apiResource('budgets', BudgetController::class);
+        Route::apiResource('goals', GoalController::class);
 
         Route::post('transactions/{transaction}/pay', [TransactionController::class, 'pay'])->name('transactions.pay');
         Route::post('transactions/{transaction}/unpay', [TransactionController::class, 'unpay'])->name('transactions.unpay');
@@ -68,6 +70,9 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('anomalies', [InsightsController::class, 'anomalies'])->name('anomalies');
             Route::get('budget-projection', [InsightsController::class, 'budgetProjection'])->name('budget-projection');
             Route::get('partial-payments', [InsightsController::class, 'partialPayments'])->name('partial-payments');
+            Route::get('cash-flow-forecast', [InsightsController::class, 'cashFlowForecast'])->name('cash-flow-forecast');
+            Route::get('net-worth-history', [InsightsController::class, 'netWorthHistory'])->name('net-worth-history');
+            Route::get('recurring-commitments', [InsightsController::class, 'recurringCommitments'])->name('recurring-commitments');
         });
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {
