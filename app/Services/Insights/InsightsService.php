@@ -12,12 +12,14 @@ use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\CashFlowForecastRequest;
 use App\Http\Requests\Insights\NetWorthHistoryRequest;
 use App\Http\Requests\Insights\PartialPaymentsRequest;
+use App\Http\Requests\Insights\RecurringCommitmentsRequest;
 use App\Http\Requests\Insights\SpendingSummaryRequest;
 use App\Http\Resources\Budgets\BudgetStatusEntryResource;
 use App\Http\Resources\Insights\AnomalyDetectionEntryResource;
 use App\Http\Resources\Insights\CashFlowForecastEntryResource;
 use App\Http\Resources\Insights\NetWorthHistoryEntryResource;
 use App\Http\Resources\Insights\PartialPaymentEntryResource;
+use App\Http\Resources\Insights\RecurringCommitmentEntryResource;
 use App\Http\Resources\Insights\SpendingSummaryResource;
 use App\Repositories\BudgetRepository;
 use App\Services\BudgetStatusService;
@@ -39,6 +41,7 @@ final class InsightsService
         private readonly PartialPaymentsService $partialPaymentsService,
         private readonly CashFlowForecastService $cashFlowForecastService,
         private readonly NetWorthHistoryService $netWorthHistoryService,
+        private readonly RecurringCommitmentsService $recurringCommitmentsService,
         private readonly BudgetRepository $budgetRepository,
     ) {}
 
@@ -199,6 +202,20 @@ final class InsightsService
                     ? round($changeCents / abs($startingBalanceCents) * 100, 2)
                     : null,
             ],
+        ];
+    }
+
+    public function recurringCommitments(RecurringCommitmentsRequest $request): array
+    {
+        $entries = $this->recurringCommitmentsService->list($request->user()->id);
+        $summary = $this->recurringCommitmentsService->summarize($entries);
+
+        return [
+            'data' => array_map(
+                static fn (array $entry): array => (new RecurringCommitmentEntryResource($entry))->resolve(),
+                $entries,
+            ),
+            'summary' => $summary,
         ];
     }
 

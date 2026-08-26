@@ -70,6 +70,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('partial-payments', [InsightsController::class, 'partialPayments'])->name('partial-payments');
             Route::get('cash-flow-forecast', [InsightsController::class, 'cashFlowForecast'])->name('cash-flow-forecast');
             Route::get('net-worth-history', [InsightsController::class, 'netWorthHistory'])->name('net-worth-history');
+            Route::get('recurring-commitments', [InsightsController::class, 'recurringCommitments'])->name('recurring-commitments');
         });
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {

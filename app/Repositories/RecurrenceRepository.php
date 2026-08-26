@@ -63,7 +63,10 @@ final class RecurrenceRepository
     /**
      * Todas as recorrências ativas do usuário, sem filtro de janela — usado
      * por CashFlowForecastService pra projetar ocorrências futuras a partir
-     * de next_due_date, indo além da janela curta de geração automática.
+     * de next_due_date (indo além da janela curta de geração automática) e
+     * por RecurringCommitmentsService pra somar o custo mensal/anual
+     * comprometido. account/category vêm eager-carregados pro segundo caso,
+     * que exibe nome/cor de cada um sem custo de N+1.
      *
      * @return Collection<int, Recurrence>
      */
@@ -71,6 +74,7 @@ final class RecurrenceRepository
     {
         return Recurrence::query()
             ->forUser($userId)
+            ->with(['account', 'category'])
             ->active()
             ->get();
     }
