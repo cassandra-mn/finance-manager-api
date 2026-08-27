@@ -12,6 +12,7 @@ use App\Models\Transaction;
 use App\Services\TransactionService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Response;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 
 class TransactionController extends Controller
 {
@@ -24,6 +25,34 @@ class TransactionController extends Controller
         $transactions = $this->service->paginateForUser($request);
 
         return TransactionResource::collection($transactions)->response();
+    }
+
+    public function export(ListTransactionsRequest $request): StreamedResponse
+    {
+        $transactions = $this->service->listForExport($request);
+
+        return response()->streamDownload(function () use ($transactions): void {
+            $handle = fopen('php://output', 'w');
+            // BOM UTF-8 pra abrir com acentuação correta direto no Excel.
+            fwrite($handle, "\xEF\xBB\xBF");
+            fputcsv($handle, ['Data', 'Descrição', 'Categoria', 'Tipo', 'Natureza', 'Status', 'Valor (R$)', 'Conta', 'Notas'], ';');
+
+            foreach ($transactions as $transaction) {
+                fputcsv($handle, [
+                    $transaction->due_date?->toDateString(),
+                    $transaction->description,
+                    $transaction->category?->name ?? '',
+                    $transaction->type->label(),
+                    $transaction->entry_type->label(),
+                    $transaction->effective_display_status->label(),
+                    number_format($transaction->amount_cents / 100, 2, ',', '.'),
+                    $transaction->account?->name ?? '',
+                    $transaction->notes ?? '',
+                ], ';');
+            }
+
+            fclose($handle);
+        }, 'transacoes.csv', ['Content-Type' => 'text/csv; charset=UTF-8']);
     }
 
     public function store(StoreTransactionRequest $request): JsonResponse

@@ -16,6 +16,7 @@ use App\Models\Transaction;
 use App\Repositories\AccountRepository;
 use App\Repositories\TransactionRepository;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
@@ -32,6 +33,21 @@ final class TransactionService
     public function paginateForUser(ListTransactionsRequest $request): LengthAwarePaginator
     {
         return $this->repository->paginateForUser(
+            $request->user()->id,
+            TransactionFiltersData::fromRequest($request),
+        );
+    }
+
+    /**
+     * Mesmos filtros de paginateForUser(), sem paginação — usado pela
+     * exportação CSV, que precisa de todas as linhas que casam com os
+     * filtros aplicados na tela, não só a página atual.
+     *
+     * @return Collection<int, Transaction>
+     */
+    public function listForExport(ListTransactionsRequest $request): Collection
+    {
+        return $this->repository->listForUser(
             $request->user()->id,
             TransactionFiltersData::fromRequest($request),
         );

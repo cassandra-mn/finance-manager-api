@@ -17,6 +17,27 @@ final class TransactionRepository
 {
     public function paginateForUser(int $userId, TransactionFiltersData $filters): LengthAwarePaginator
     {
+        return $this->filteredQueryForUser($userId, $filters)
+            ->orderBy('due_date')
+            ->paginate($filters->perPage);
+    }
+
+    /**
+     * Mesmos filtros de paginateForUser(), sem limite de página — usado pela
+     * exportação CSV, que precisa de todas as linhas que casam com os
+     * filtros, não só uma página de até Pagination::MAX_PER_PAGE.
+     *
+     * @return Collection<int, Transaction>
+     */
+    public function listForUser(int $userId, TransactionFiltersData $filters): Collection
+    {
+        return $this->filteredQueryForUser($userId, $filters)
+            ->orderBy('due_date')
+            ->get();
+    }
+
+    private function filteredQueryForUser(int $userId, TransactionFiltersData $filters): Builder
+    {
         return Transaction::query()
             ->forUser($userId)
             ->with(['account', 'category'])
@@ -35,9 +56,7 @@ final class TransactionRepository
                 $query->whereBetween('due_date', [$from->toDateString(), $to->toDateString()]);
             })
             ->when($filters->from, fn (Builder $query) => $query->whereDate('due_date', '>=', $filters->from))
-            ->when($filters->to, fn (Builder $query) => $query->whereDate('due_date', '<=', $filters->to))
-            ->orderBy('due_date')
-            ->paginate($filters->perPage);
+            ->when($filters->to, fn (Builder $query) => $query->whereDate('due_date', '<=', $filters->to));
     }
 
     private function applyStatusFilter(Builder $query, TransactionDisplayStatus $status): Builder
