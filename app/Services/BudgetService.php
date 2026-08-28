@@ -14,6 +14,7 @@ use App\Http\Requests\Budgets\UpdateBudgetRequest;
 use App\Http\Resources\Budgets\BudgetStatusEntryResource;
 use App\Models\Budget;
 use App\Repositories\BudgetRepository;
+use App\Repositories\TransactionRepository;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Carbon;
@@ -26,6 +27,7 @@ final class BudgetService
     public function __construct(
         private readonly BudgetRepository $repository,
         private readonly BudgetStatusService $statusService,
+        private readonly TransactionRepository $transactionRepository,
     ) {}
 
     /** @return Collection<int, Budget> */
@@ -146,19 +148,27 @@ final class BudgetService
                 static fn (array $entry): array => (new BudgetStatusEntryResource($entry))->resolve(),
                 $entries,
             ),
-            'summary' => $this->buildSummary($entries),
+            'summary' => $this->buildSummary($request->user()->id, $entries, $start, $end),
         ];
     }
 
-    private function buildSummary(array $entries): array
+    private function buildSummary(int $userId, array $entries, Carbon $start, Carbon $end): array
     {
         $totalBudgetCents = array_sum(array_map(fn (array $entry) => $entry['budget']->amount_cents, $entries));
         $totalSpentCents = array_sum(array_map(fn (array $entry) => $entry['spent_cents'], $entries));
+
+        // Receita do período, pro modo de orçamento base-zero: cada real da
+        // renda precisa ter um destino (uma categoria) até "não alocado"
+        // chegar a zero — não é o mesmo conceito de total_remaining_cents
+        // acima, que compara orçamento com gasto, não com renda.
+        $incomeCents = $this->transactionRepository->sumTotalsForUser($userId, $start, $end)['income_cents'];
 
         return [
             'total_budget_cents' => $totalBudgetCents,
             'total_spent_cents' => $totalSpentCents,
             'total_remaining_cents' => $totalBudgetCents - $totalSpentCents,
+            'income_cents' => $incomeCents,
+            'unallocated_cents' => $incomeCents - $totalBudgetCents,
             'safe_count' => $this->countByStatus($entries, BudgetStatus::SAFE),
             'warning_count' => $this->countByStatus($entries, BudgetStatus::WARNING),
             'exceeded_count' => $this->countByStatus($entries, BudgetStatus::EXCEEDED),
