@@ -2,11 +2,13 @@
 
 namespace App\Services\Insights;
 
+use App\Data\Insights\AnnualReportFiltersData;
 use App\Data\Insights\AnomalyDetectionFiltersData;
 use App\Data\Insights\CashFlowForecastFiltersData;
 use App\Data\Insights\NetWorthHistoryFiltersData;
 use App\Data\Insights\PartialPaymentsFiltersData;
 use App\Data\Insights\SpendingSummaryFiltersData;
+use App\Http\Requests\Insights\AnnualReportRequest;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\CashFlowForecastRequest;
@@ -42,6 +44,7 @@ final class InsightsService
         private readonly CashFlowForecastService $cashFlowForecastService,
         private readonly NetWorthHistoryService $netWorthHistoryService,
         private readonly RecurringCommitmentsService $recurringCommitmentsService,
+        private readonly AnnualReportService $annualReportService,
         private readonly BudgetRepository $budgetRepository,
     ) {}
 
@@ -220,6 +223,13 @@ final class InsightsService
             ),
             'summary' => $summary,
         ];
+    }
+
+    public function annualReport(AnnualReportRequest $request): array
+    {
+        $filters = AnnualReportFiltersData::fromRequest($request);
+
+        return $this->annualReportService->build($request->user()->id, $filters->year, $filters->topCategories);
     }
 
     public function budgetProjection(BudgetProjectionRequest $request): array
