@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Insights\AnnualReportRequest;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\CashFlowForecastRequest;
@@ -52,5 +53,10 @@ class InsightsController extends Controller
     public function recurringCommitments(RecurringCommitmentsRequest $request): JsonResponse
     {
         return response()->json($this->service->recurringCommitments($request));
+    }
+
+    public function annualReport(AnnualReportRequest $request): JsonResponse
+    {
+        return response()->json($this->service->annualReport($request));
     }
 }

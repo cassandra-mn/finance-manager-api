@@ -200,4 +200,22 @@ final class TransactionRepository
             ->groupBy('month', 'type')
             ->get();
     }
+
+    /**
+     * Soma receita/despesa por mês de um ano inteiro, mesmo critério de
+     * "gasto" de sumTotalsForUser() (exclui só cancelled) — usado pelo
+     * relatório anual.
+     *
+     * @return Collection<int, object{month:string, type:string, total_cents:int}>
+     */
+    public function sumTotalsByMonthForUser(int $userId, int $year): Collection
+    {
+        return Transaction::query()
+            ->forUser($userId)
+            ->where('status', '!=', TransactionStatus::CANCELLED->value)
+            ->whereYear('due_date', $year)
+            ->selectRaw("to_char(due_date, 'YYYY-MM') as month, type, SUM(amount_cents) as total_cents")
+            ->groupBy('month', 'type')
+            ->get();
+    }
 }
