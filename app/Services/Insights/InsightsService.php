@@ -5,6 +5,7 @@ namespace App\Services\Insights;
 use App\Data\Insights\AnnualReportFiltersData;
 use App\Data\Insights\AnomalyDetectionFiltersData;
 use App\Data\Insights\CashFlowForecastFiltersData;
+use App\Data\Insights\DebtPayoffPlanFiltersData;
 use App\Data\Insights\NetWorthHistoryFiltersData;
 use App\Data\Insights\PartialPaymentsFiltersData;
 use App\Data\Insights\SpendingSummaryFiltersData;
@@ -12,6 +13,7 @@ use App\Http\Requests\Insights\AnnualReportRequest;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\CashFlowForecastRequest;
+use App\Http\Requests\Insights\DebtPayoffPlanRequest;
 use App\Http\Requests\Insights\NetWorthHistoryRequest;
 use App\Http\Requests\Insights\PartialPaymentsRequest;
 use App\Http\Requests\Insights\RecurringCommitmentsRequest;
@@ -19,6 +21,7 @@ use App\Http\Requests\Insights\SpendingSummaryRequest;
 use App\Http\Resources\Budgets\BudgetStatusEntryResource;
 use App\Http\Resources\Insights\AnomalyDetectionEntryResource;
 use App\Http\Resources\Insights\CashFlowForecastEntryResource;
+use App\Http\Resources\Insights\DebtPayoffScheduleEntryResource;
 use App\Http\Resources\Insights\NetWorthHistoryEntryResource;
 use App\Http\Resources\Insights\PartialPaymentEntryResource;
 use App\Http\Resources\Insights\RecurringCommitmentEntryResource;
@@ -45,6 +48,7 @@ final class InsightsService
         private readonly NetWorthHistoryService $netWorthHistoryService,
         private readonly RecurringCommitmentsService $recurringCommitmentsService,
         private readonly AnnualReportService $annualReportService,
+        private readonly DebtPayoffPlanService $debtPayoffPlanService,
         private readonly BudgetRepository $budgetRepository,
     ) {}
 
@@ -230,6 +234,35 @@ final class InsightsService
         $filters = AnnualReportFiltersData::fromRequest($request);
 
         return $this->annualReportService->build($request->user()->id, $filters->year, $filters->topCategories);
+    }
+
+    public function debtPayoffPlan(DebtPayoffPlanRequest $request): array
+    {
+        $filters = DebtPayoffPlanFiltersData::fromRequest($request);
+
+        $plan = $this->debtPayoffPlanService->build(
+            $request->user()->id,
+            $filters->accountId,
+            $filters->monthlyPaymentCents,
+            $filters->annualInterestRatePercentage,
+        );
+
+        return [
+            'data' => array_map(
+                static fn (array $entry): array => (new DebtPayoffScheduleEntryResource($entry))->resolve(),
+                $plan['schedule'],
+            ),
+            'summary' => [
+                'account_id' => $plan['account_id'],
+                'current_debt_cents' => $plan['current_debt_cents'],
+                'monthly_payment_cents' => $plan['monthly_payment_cents'],
+                'annual_interest_rate_percentage' => $plan['annual_interest_rate_percentage'],
+                'months_to_payoff' => $plan['months_to_payoff'],
+                'payoff_date' => $plan['payoff_date'],
+                'total_interest_cents' => $plan['total_interest_cents'],
+                'total_paid_cents' => $plan['total_paid_cents'],
+            ],
+        ];
     }
 
     public function budgetProjection(BudgetProjectionRequest $request): array
