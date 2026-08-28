@@ -158,4 +158,35 @@ class PeriodResolverTest extends TestCase
         $this->assertSame('2026-02-16', $from->toDateString());
         $this->assertSame('2026-02-28', $to->toDateString());
     }
+
+    public function test_previous_year_resolves_the_same_month_one_year_earlier(): void
+    {
+        [$currentStart] = PeriodResolver::resolve(TransactionPeriod::MONTH, Carbon::parse('2026-08-15'));
+
+        [$from, $to] = PeriodResolver::previousYear(TransactionPeriod::MONTH, $currentStart);
+
+        $this->assertSame('2025-08-01', $from->toDateString());
+        $this->assertSame('2025-08-31', $to->toDateString());
+    }
+
+    public function test_previous_year_is_not_the_same_as_previous_period_for_month(): void
+    {
+        [$currentStart] = PeriodResolver::resolve(TransactionPeriod::MONTH, Carbon::parse('2026-08-15'));
+
+        [$previousPeriodFrom] = PeriodResolver::previous(TransactionPeriod::MONTH, $currentStart);
+        [$previousYearFrom] = PeriodResolver::previousYear(TransactionPeriod::MONTH, $currentStart);
+
+        $this->assertSame('2026-07-01', $previousPeriodFrom->toDateString());
+        $this->assertSame('2025-08-01', $previousYearFrom->toDateString());
+    }
+
+    public function test_previous_year_resolves_the_same_quarter_one_year_earlier(): void
+    {
+        [$currentStart] = PeriodResolver::resolve(TransactionPeriod::QUARTER, Carbon::parse('2026-08-15'));
+
+        [$from, $to] = PeriodResolver::previousYear(TransactionPeriod::QUARTER, $currentStart);
+
+        $this->assertSame('2025-07-01', $from->toDateString());
+        $this->assertSame('2025-09-30', $to->toDateString());
+    }
 }

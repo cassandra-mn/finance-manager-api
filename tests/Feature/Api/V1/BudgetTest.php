@@ -373,6 +373,65 @@ class BudgetTest extends TestCase
             ->assertJsonPath('summary.warning_count', 0);
     }
 
+    public function test_status_summary_includes_income_and_unallocated_for_zero_based_budgeting(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $incomeCategory = Category::factory()->for($user)->income()->create();
+        $expenseCategory = Category::factory()->for($user)->expense()->create();
+
+        Transaction::factory()->for($user)->for($account)->for($incomeCategory)->income()
+            ->create(['amount_cents' => 500000, 'due_date' => '2026-08-05']);
+
+        Budget::factory()->for($user)->for($expenseCategory)->forPeriod(8, 2026)->create(['amount_cents' => 350000]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/budgets/status?reference_date=2026-08-15');
+
+        $response->assertOk()
+            ->assertJsonPath('summary.income_cents', 500000)
+            ->assertJsonPath('summary.total_budget_cents', 350000)
+            ->assertJsonPath('summary.unallocated_cents', 150000);
+    }
+
+    public function test_status_unallocated_is_negative_when_budgets_exceed_income(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $incomeCategory = Category::factory()->for($user)->income()->create();
+        $expenseCategory = Category::factory()->for($user)->expense()->create();
+
+        Transaction::factory()->for($user)->for($account)->for($incomeCategory)->income()
+            ->create(['amount_cents' => 100000, 'due_date' => '2026-08-05']);
+
+        Budget::factory()->for($user)->for($expenseCategory)->forPeriod(8, 2026)->create(['amount_cents' => 150000]);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/budgets/status?reference_date=2026-08-15');
+
+        $response->assertOk()->assertJsonPath('summary.unallocated_cents', -50000);
+    }
+
+    public function test_status_income_only_counts_the_referenced_month(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $incomeCategory = Category::factory()->for($user)->income()->create();
+
+        Transaction::factory()->for($user)->for($account)->for($incomeCategory)->income()
+            ->create(['amount_cents' => 500000, 'due_date' => '2026-08-05']);
+        Transaction::factory()->for($user)->for($account)->for($incomeCategory)->income()
+            ->create(['amount_cents' => 999999, 'due_date' => '2026-07-05']);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/budgets/status?reference_date=2026-08-15');
+
+        $response->assertOk()->assertJsonPath('summary.income_cents', 500000);
+    }
+
     public function test_status_uses_reference_date_to_resolve_month_and_year(): void
     {
         $user = User::factory()->create();

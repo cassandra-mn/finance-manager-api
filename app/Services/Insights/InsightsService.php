@@ -50,7 +50,9 @@ final class InsightsService
         $filters = SpendingSummaryFiltersData::fromRequest($request);
 
         [$currentStart, $currentEnd] = PeriodResolver::resolve($filters->period, $filters->referenceDate);
-        [$previousStart, $previousEnd] = PeriodResolver::previous($filters->period, $currentStart);
+        [$previousStart, $previousEnd] = $filters->compareTo === 'previous_year'
+            ? PeriodResolver::previousYear($filters->period, $currentStart)
+            : PeriodResolver::previous($filters->period, $currentStart);
 
         $data = $this->spendingSummaryService->compare(
             $request->user()->id,
@@ -64,6 +66,7 @@ final class InsightsService
         return [
             'reference_period' => [
                 'period' => $filters->period->value,
+                'compare_to' => $filters->compareTo,
                 'current' => ['from' => $currentStart->toDateString(), 'to' => $currentEnd->toDateString()],
                 'previous' => ['from' => $previousStart->toDateString(), 'to' => $previousEnd->toDateString()],
             ],

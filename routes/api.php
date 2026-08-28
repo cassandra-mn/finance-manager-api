@@ -42,6 +42,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
     Route::middleware('auth:sanctum')->group(function (): void {
         Route::apiResource('accounts', AccountController::class);
         Route::apiResource('categories', CategoryController::class);
+        Route::get('transactions/export', [TransactionController::class, 'export'])->name('transactions.export');
         Route::apiResource('transactions', TransactionController::class);
         Route::apiResource('recurrences', RecurrenceController::class);
 

@@ -89,6 +89,65 @@ class SpendingSummaryTest extends TestCase
             ->assertJsonValidationErrors('period');
     }
 
+    public function test_compare_to_previous_year_uses_the_same_month_a_year_earlier(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->getJson('/api/v1/insights/spending-summary?compare_to=previous_year');
+
+        $response->assertOk()
+            ->assertJsonPath('reference_period.compare_to', 'previous_year')
+            ->assertJsonPath('reference_period.current.from', '2026-08-01')
+            ->assertJsonPath('reference_period.current.to', '2026-08-31')
+            ->assertJsonPath('reference_period.previous.from', '2025-08-01')
+            ->assertJsonPath('reference_period.previous.to', '2025-08-31');
+    }
+
+    public function test_compare_to_defaults_to_previous_period(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $response = $this->getJson('/api/v1/insights/spending-summary');
+
+        $response->assertOk()->assertJsonPath('reference_period.compare_to', 'previous_period');
+    }
+
+    public function test_compare_to_previous_year_compares_expenses_from_a_year_ago(): void
+    {
+        $user = User::factory()->create();
+        $account = Account::factory()->for($user)->create();
+        $category = Category::factory()->for($user)->expense()->create();
+
+        // This year's August expense.
+        Transaction::factory()->for($user)->for($account)->for($category)->expense()
+            ->create(['amount_cents' => 20000, 'due_date' => '2026-08-05']);
+
+        // Same month, last year — must land in "previous", not be ignored.
+        Transaction::factory()->for($user)->for($account)->for($category)->expense()
+            ->create(['amount_cents' => 10000, 'due_date' => '2025-08-05']);
+
+        // Last calendar month (July/2026) — must NOT be counted when comparing to previous_year.
+        Transaction::factory()->for($user)->for($account)->for($category)->expense()
+            ->create(['amount_cents' => 99999, 'due_date' => '2026-07-05']);
+
+        Sanctum::actingAs($user);
+
+        $response = $this->getJson('/api/v1/insights/spending-summary?compare_to=previous_year');
+
+        $response->assertOk()
+            ->assertJsonPath('data.current.expense_cents', 20000)
+            ->assertJsonPath('data.previous.expense_cents', 10000);
+    }
+
+    public function test_compare_to_must_be_a_valid_value(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->getJson('/api/v1/insights/spending-summary?compare_to=last_week')
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('compare_to');
+    }
+
     public function test_another_users_transactions_never_appear(): void
     {
         $userA = User::factory()->create();
