@@ -7,6 +7,7 @@ use App\Http\Requests\Insights\AnnualReportRequest;
 use App\Http\Requests\Insights\AnomalyDetectionRequest;
 use App\Http\Requests\Insights\BudgetProjectionRequest;
 use App\Http\Requests\Insights\CashFlowForecastRequest;
+use App\Http\Requests\Insights\DebtPayoffPlanRequest;
 use App\Http\Requests\Insights\NetWorthHistoryRequest;
 use App\Http\Requests\Insights\PartialPaymentsRequest;
 use App\Http\Requests\Insights\RecurringCommitmentsRequest;
@@ -58,5 +59,10 @@ class InsightsController extends Controller
     public function annualReport(AnnualReportRequest $request): JsonResponse
     {
         return response()->json($this->service->annualReport($request));
+    }
+
+    public function debtPayoffPlan(DebtPayoffPlanRequest $request): JsonResponse
+    {
+        return response()->json($this->service->debtPayoffPlan($request));
     }
 }

@@ -75,6 +75,7 @@ Route::prefix('v1')->name('api.v1.')->group(function (): void {
             Route::get('net-worth-history', [InsightsController::class, 'netWorthHistory'])->name('net-worth-history');
             Route::get('recurring-commitments', [InsightsController::class, 'recurringCommitments'])->name('recurring-commitments');
             Route::get('annual-report', [InsightsController::class, 'annualReport'])->name('annual-report');
+            Route::get('debt-payoff-plan', [InsightsController::class, 'debtPayoffPlan'])->name('debt-payoff-plan');
         });
 
         Route::middleware('throttle:ai-assistant')->group(function (): void {
