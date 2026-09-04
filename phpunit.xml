@@ -36,5 +36,24 @@
         <env name="PULSE_ENABLED" value="false"/>
         <env name="TELESCOPE_ENABLED" value="false"/>
         <env name="NIGHTWATCH_ENABLED" value="false"/>
+        <!--
+            Todas as feature flags ligadas por padrão nos testes: a suíte
+            funcional existente cobre cada funcionalidade como se estivesse
+            em produção, independente do rollout gradual real. Os testes
+            específicos de feature flag (EnsureFeatureEnabledTest e afins)
+            desligam a flag explicitamente dentro do próprio teste via
+            config(['features.x' => false]), então não dependem deste default.
+        -->
+        <env name="FEATURE_BUDGETS" value="true"/>
+        <env name="FEATURE_GOALS" value="true"/>
+        <env name="FEATURE_INVOICES" value="true"/>
+        <env name="FEATURE_RECURRENCES" value="true"/>
+        <env name="FEATURE_INSIGHTS_PANEL" value="true"/>
+        <env name="FEATURE_ANNUAL_REPORT" value="true"/>
+        <env name="FEATURE_DEBT_PAYOFF_PLAN" value="true"/>
+        <env name="FEATURE_AI_ASSISTANT" value="true"/>
+        <env name="FEATURE_WHATSAPP" value="true"/>
+        <env name="FEATURE_STATEMENT_IMPORT" value="true"/>
+        <env name="FEATURE_TRANSACTION_EXPORT" value="true"/>
     </php>
 </phpunit>
