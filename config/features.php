@@ -10,7 +10,12 @@
  * EnsureFeatureEnabled), aplicado por grupo de rotas em routes/api.php.
  */
 return [
-    'budgets' => (bool) env('FEATURE_BUDGETS', false),
+    // budgets: ligada por padrão nesta branch (dev) — primeira flag
+    // religada pro rollout gradual. Sem ambiente de deploy próprio ainda,
+    // o "ligar" é literalmente mudar o fallback aqui; quando a dev tiver
+    // deploy de verdade, isso pode virar uma env var (FEATURE_BUDGETS=true)
+    // sem precisar tocar neste arquivo de novo.
+    'budgets' => (bool) env('FEATURE_BUDGETS', true),
     'goals' => (bool) env('FEATURE_GOALS', false),
     'invoices' => (bool) env('FEATURE_INVOICES', false),
     'recurrences' => (bool) env('FEATURE_RECURRENCES', false),
