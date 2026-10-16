@@ -6,6 +6,7 @@ use App\Enum\TransactionEntryType;
 use App\Enum\TransactionType;
 use App\Models\Account;
 use App\Models\Category;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -65,7 +66,7 @@ class TransactionTest extends TestCase
         $account = Account::factory()->for($user)->create();
         $category = Category::factory()->for($user)->expense()->create();
 
-        $transaction = \App\Models\Transaction::factory()->create([
+        $transaction = Transaction::factory()->create([
             'user_id' => $user->id,
             'account_id' => $account->id,
             'category_id' => $category->id,
